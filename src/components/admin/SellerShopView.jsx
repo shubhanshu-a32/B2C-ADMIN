@@ -14,7 +14,6 @@ export default function SellerShopView() {
     const [loading, setLoading] = useState(true);
     const { theme, toggleTheme } = useThemeStore();
 
-    // Check if we came from a product page (logic from user snippet)
     const fromProductId = location.state?.fromProduct;
 
     useEffect(() => {

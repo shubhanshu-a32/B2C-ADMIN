@@ -1,7 +1,6 @@
 import axios from "axios";
 
 const api = axios.create({
-  // Hardcoded for debugging to ensure correct path
   baseURL: "http://localhost:4000/api",
 });
 

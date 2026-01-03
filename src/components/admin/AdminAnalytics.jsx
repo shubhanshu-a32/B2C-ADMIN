@@ -23,15 +23,15 @@ export default function AdminAnalytics() {
 
     return (
         <div className="space-y-8 animate-fade-in">
-            <div className="flex justify-between items-end">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Platform Analytics</h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-1">Detailed performance metrics</p>
                 </div>
-                <div className="flex items-center gap-3 bg-white dark:bg-gray-800 p-1 rounded-lg border dark:border-gray-700">
-                    <button className="px-3 py-1.5 text-xs font-semibold bg-gray-100 dark:bg-gray-700 rounded text-gray-900 dark:text-white">7 Days</button>
-                    <button className="px-3 py-1.5 text-xs font-semibold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition">30 Days</button>
-                    <button className="px-3 py-1.5 text-xs font-semibold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition">All Time</button>
+                <div className="flex items-center gap-3 bg-white dark:bg-gray-800 p-1 rounded-lg border dark:border-gray-700 w-full sm:w-auto overflow-x-auto no-scrollbar">
+                    <button className="px-3 py-1.5 text-xs font-semibold bg-gray-100 dark:bg-gray-700 rounded text-gray-900 dark:text-white whitespace-nowrap">7 Days</button>
+                    <button className="px-3 py-1.5 text-xs font-semibold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition whitespace-nowrap">30 Days</button>
+                    <button className="px-3 py-1.5 text-xs font-semibold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition whitespace-nowrap">All Time</button>
                 </div>
             </div>
 

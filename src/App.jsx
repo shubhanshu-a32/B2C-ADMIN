@@ -10,6 +10,9 @@ import AdminAnalytics from './components/admin/AdminAnalytics';
 import AdminProfile from './components/admin/AdminProfile';
 import SellerShopView from './components/admin/SellerShopView';
 import AdminLogin from './components/admin/AdminLogin';
+import AdminOrders from './components/admin/AdminOrders';
+import AdminOrderDetails from './components/admin/AdminOrderDetails';
+import AdminDelivery from './components/admin/AdminDelivery';
 import AdminLayout from './components/layouts/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css'
@@ -31,6 +34,10 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AdminLayout />}>
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/orders" element={<AdminOrders />} />
+            <Route path="/admin/completed-orders" element={<AdminOrders isCompletedView={true} />} />
+            <Route path="/admin/order/:id" element={<AdminOrderDetails />} />
+            <Route path="/admin/delivery" element={<AdminDelivery />} />
             <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="/admin/sellers" element={<AdminSellers />} />
             <Route path="/admin/categories" element={<AdminCategories />} />

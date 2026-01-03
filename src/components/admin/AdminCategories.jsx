@@ -56,6 +56,30 @@ export default function AdminCategories() {
         }
     };
 
+    const handleDeleteCategory = async (id) => {
+        if (!window.confirm("Are you sure you want to delete this category? All subcategories will also be deleted.")) return;
+        try {
+            await api.delete(`/admin/categories/${id}`);
+            toast.success("Category deleted");
+            loadCategories();
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to delete category");
+        }
+    };
+
+    const handleDeleteSubCategory = async (id) => {
+        if (!window.confirm("Are you sure you want to delete this subcategory?")) return;
+        try {
+            await api.delete(`/admin/subcategories/${id}`);
+            toast.success("Subcategory deleted");
+            loadCategories();
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to delete subcategory");
+        }
+    };
+
     return (
         <div className="space-y-8 animate-fade-in max-w-6xl mx-auto">
             <div>
@@ -154,18 +178,39 @@ export default function AdminCategories() {
                                             )}
                                             {cat.name}
                                         </h4>
-                                        <span className="text-xs font-mono text-gray-400 bg-white dark:bg-gray-800 px-2 py-1 rounded border dark:border-gray-700">
-                                            {cat.subCategories?.length || 0} subs
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-mono text-gray-400 bg-white dark:bg-gray-800 px-2 py-1 rounded border dark:border-gray-700">
+                                                {cat.subCategories?.length || 0} subs
+                                            </span>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteCategory(cat._id);
+                                                }}
+                                                className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                                                title="Delete Category"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {expandedCategories[cat._id] && (
                                         <div className="pl-4 border-l-2 border-gray-200 dark:border-gray-700 space-y-2 animate-fade-in">
                                             {cat.subCategories?.length > 0 ? (
                                                 cat.subCategories.map((sub) => (
-                                                    <div key={sub._id} className="flex items-center text-sm text-gray-600 dark:text-gray-300">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mr-2"></div>
-                                                        {sub.name}
+                                                    <div key={sub._id} className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-300 group/sub">
+                                                        <div className="flex items-center">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mr-2"></div>
+                                                            {sub.name}
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleDeleteSubCategory(sub._id)}
+                                                            className="p-1 opacity-0 group-hover/sub:opacity-100 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-all"
+                                                            title="Delete Subcategory"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
                                                     </div>
                                                 ))
                                             ) : (

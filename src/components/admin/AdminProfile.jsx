@@ -26,7 +26,6 @@ export default function AdminProfile() {
             return toast.error("New passwords do not match");
         }
 
-        // If changing password, current is required
         if (formData.newPassword && !formData.currentPassword) {
             return toast.error("Current password required to set new password");
         }
@@ -39,9 +38,6 @@ export default function AdminProfile() {
                 newPassword: formData.newPassword || undefined
             });
 
-            // Allow store to update user details without full re-login if token is valid, 
-            // but effectively we just update user object in store
-            // We need to keep the token.
             const currentToken = useAuthStore.getState().accessToken;
             useAuthStore.setState(state => ({
                 user: { ...state.user, mobile: data.admin.mobile }

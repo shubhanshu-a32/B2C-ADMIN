@@ -19,15 +19,13 @@ export default function AdminLogin() {
         e.preventDefault();
         setLoading(true);
         try {
-            // Determine payload based on input type (simple check: if only digits, assume mobile)
             const isMobile = /^\d+$/.test(email);
             const payload = isMobile ? { mobile: email, password } : { email, password };
 
-            console.log("Sending Login Payload:", payload); // Debug log
+            console.log("Sending Login Payload:", payload); 
             const res = await api.post("/admin/login", payload);
             const { accessToken, refreshToken, admin } = res.data;
 
-            // Save directly via store using setAuth (user, accessToken, refreshToken)
             login({ ...admin, role: "admin" }, accessToken, refreshToken);
 
             toast.success("Welcome back, Admin!");
@@ -43,7 +41,6 @@ export default function AdminLogin() {
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 relative overflow-hidden font-sans">
 
-            {/* Background Decorative Blobs */}
             <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none transition-colors duration-500 bg-gradient-to-br from-gray-800 to-black" />
             <div className="absolute -top-40 -right-40 w-96 h-96 bg-red-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
             <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../services/api";
-import { Package, Search, Calendar, User, Store, Trash2, Truck, CheckCircle, Bell, DollarSign, Eye, X } from "lucide-react";
+import { Package, Search, Calendar, User, Store, Trash2, Truck, CheckCircle, Bell, Eye, X } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function AdminOrders(props) {
@@ -410,7 +410,6 @@ export default function AdminOrders(props) {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center gap-1 font-medium text-gray-900 dark:text-white">
-                                                <DollarSign size={14} className="text-gray-400" />
                                                 ₹{order.totalAmount?.toLocaleString()}
                                             </div>
                                         </td>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../../services/api";
-import { Truck, User, Phone, Plus, Trash2 } from "lucide-react";
+import { Truck, User, Phone, Plus, Trash2, Pencil } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function AdminDelivery() {
@@ -8,6 +8,7 @@ export default function AdminDelivery() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [formData, setFormData] = useState({ name: "", mobile: "", pincode: "" });
+    const [editingId, setEditingId] = useState(null);
 
     useEffect(() => {
         loadPartners();
@@ -26,17 +27,40 @@ export default function AdminDelivery() {
         }
     };
 
-    const handleCreate = async (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await api.post("/admin/delivery-partners", formData);
-            toast.success("Delivery Partner created");
-            setShowModal(false);
-            setFormData({ name: "", mobile: "", pincode: "" });
+            if (editingId) {
+                // Update existing
+                await api.put(`/admin/delivery-partners/${editingId}`, formData);
+                toast.success("Delivery Partner updated");
+            } else {
+                // Create new
+                await api.post("/admin/delivery-partners", formData);
+                toast.success("Delivery Partner created");
+            }
+            closeModal();
             loadPartners();
         } catch (err) {
-            toast.error(err.response?.data?.message || "Failed to create partner");
+            console.error(err);
+            toast.error(err.response?.data?.message || "Failed to save partner");
         }
+    };
+
+    const handleEdit = (partner) => {
+        setEditingId(partner._id);
+        const name = partner.fullName || partner.name || partner.userId?.fullName || partner.userId?.name || "";
+        const mobile = partner.mobile || partner.userId?.mobile || "";
+        const pincode = partner.pincode || "";
+
+        setFormData({ name, mobile, pincode });
+        setShowModal(true);
+    };
+
+    const closeModal = () => {
+        setShowModal(false);
+        setFormData({ name: "", mobile: "", pincode: "" });
+        setEditingId(null);
     };
 
     const handleDelete = async (id) => {
@@ -77,22 +101,33 @@ export default function AdminDelivery() {
                             <User size={24} />
                         </div>
                         <div className="flex-1">
-                            <h3 className="font-semibold text-gray-900 dark:text-white">{partner.fullName || partner.name}</h3>
+                            <h3 className="font-semibold text-gray-900 dark:text-white">
+                                {partner.fullName || partner.name || partner.userId?.fullName || partner.userId?.name}
+                            </h3>
                             <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
                                 <Phone size={14} />
-                                {partner.mobile}
+                                {partner.mobile || partner.userId?.mobile}
                             </div>
                             {partner.pincode && (
                                 <div className="text-xs text-gray-400 mt-1">PIN: {partner.pincode}</div>
                             )}
                         </div>
-                        <button
-                            onClick={() => handleDelete(partner._id)}
-                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                            title="Delete Partner"
-                        >
-                            <Trash2 size={18} />
-                        </button>
+                        <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                            <button
+                                onClick={() => handleEdit(partner)}
+                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                title="Edit Partner"
+                            >
+                                <Pencil size={18} />
+                            </button>
+                            <button
+                                onClick={() => handleDelete(partner._id)}
+                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                title="Delete Partner"
+                            >
+                                <Trash2 size={18} />
+                            </button>
+                        </div>
                     </div>
                 ))}
             </div>
@@ -106,8 +141,10 @@ export default function AdminDelivery() {
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                     <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md p-6">
-                        <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Add Delivery Partner</h2>
-                        <form onSubmit={handleCreate} className="space-y-4">
+                        <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">
+                            {editingId ? "Edit Delivery Partner" : "Add Delivery Partner"}
+                        </h2>
+                        <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Name</label>
                                 <input
@@ -140,16 +177,16 @@ export default function AdminDelivery() {
                             <div className="flex gap-3 pt-2">
                                 <button
                                     type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className="flex-1 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg"
+                                    onClick={closeModal}
+                                    className="flex-1 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 py-2 bg-blue-600 text-white rounded-lg"
+                                    className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                                 >
-                                    Create
+                                    {editingId ? "Update" : "Create"}
                                 </button>
                             </div>
                         </form>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import api from "../../services/api";
 import { Package, Search, Calendar, User, Store, Trash2, Truck, CheckCircle, Bell, Eye, X } from "lucide-react";
 import toast from "react-hot-toast";
@@ -10,6 +10,7 @@ export default function AdminOrders(props) {
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [selectedOrderId, setSelectedOrderId] = useState(null);
     const [selectedPartner, setSelectedPartner] = useState(null);
+    const [selectedSeller, setSelectedSeller] = useState(null);
     const [viewOrder, setViewOrder] = useState(null);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
@@ -80,11 +81,62 @@ export default function AdminOrders(props) {
     const openAssignModal = async (orderId) => {
         setSelectedOrderId(orderId);
         try {
+            // 1. Find the order locally
+            const order = orders.find(o => o._id === orderId);
+            if (!order) {
+                toast.error("Order not found locally");
+                return;
+            }
+
+            // 2. Fetch Seller Profile to get Pincode
+            // Check if sellerId is populated object or just ID
+            let sellerId = order.sellerId;
+            if (sellerId && typeof sellerId === 'object' && sellerId._id) {
+                sellerId = sellerId._id;
+            }
+
+            if (!sellerId) {
+                toast.error("Seller ID missing on order");
+                return;
+            }
+
+            const sellerRes = await api.get(`/admin/sellers/${sellerId}`);
+            if (sellerRes.data) {
+                // Store full seller details (User + Profile)
+                setSelectedSeller(sellerRes.data);
+            }
+
+            // Logic to find pincode: 
+            // The backend for getSellerById returns { user, profile, orders }
+            // Profile usually has pincode.
+            const sellerPincode = sellerRes.data.profile?.pincode;
+
+            if (!sellerPincode) {
+                toast.error("Seller does not have a pincode set. Cannot filter partners.");
+                // We will fetch all and show empty, or just show warning.
+                setPartners([]); // Strict adherence
+                setShowAssignModal(true);
+                return;
+            }
             const res = await api.get("/admin/delivery-partners");
-            setPartners(res.data);
+            const allPartners = res.data;
+            const normalizedSellerPin = String(sellerPincode).trim();
+
+            const validPartners = allPartners.filter(p => {
+                if (!p.pincode) return false;
+                return String(p.pincode).trim() === normalizedSellerPin;
+            });
+
+            setPartners(validPartners);
             setShowAssignModal(true);
+
+            if (validPartners.length === 0) {
+                toast("No delivery partners found for PIN: " + normalizedSellerPin, { icon: '⚠️' });
+            }
+
         } catch (err) {
-            toast.error("Failed to load delivery partners");
+            console.error("Assign Modal Error:", err);
+            toast.error("Failed to load suitable delivery partners");
         }
     };
 
@@ -105,7 +157,44 @@ export default function AdminOrders(props) {
 
             if (order && partner) {
                 // 1. Partner Message
-                const pickupMsg = `Hello ${partner.fullName},\nNew Order Assigned!\n\nPICKUP FROM:\nShop: ${order.sellerId?.shopName || "Seller"}\n\nDELIVER TO:\nBuyer: ${order.buyer?.fullName || "Customer"}\nMobile: ${order.buyer?.mobile}\n\nPlease proceed immediately.`;
+                // Construct Map Link if coordinates exist (check both User and Profile or wherever they are stored)
+                let mapLink = "";
+                // sellerId on order might be just ID or object depending on population. 
+                // But we fetched full details in openAssignModal into selectedSeller
+                // Let's use selectedSeller if it matches the current order's seller
+
+                // Fallback to order.sellerId if selectedSeller is missing or mismatch
+                const sellerData = (selectedSeller && (selectedSeller.user?._id === (order.sellerId?._id || order.sellerId)))
+                    ? selectedSeller
+                    : { useOrder: true };
+
+                // Try to find lat/lng
+                // If it's in SellerProfile (sellerData.profile) or User (sellerData.user)
+                // Based on backend 'assignOrderToPartner' logic, it seems it expects 'lat'/'lng' directly on the populated sellerId object in Order...
+                // BUT 'getSellerById' returns { user, profile }. 
+                // Let's check where lat/lng usually lives. 'SellerProfile' likely has address/lat/lng.
+                // The prompt Code says: `order.sellerId.lat` (populated). 
+                // However, `AdminOrders.jsx` line 152 calls `api.post(...)` which triggers the backend.
+                // The frontend message is a FALLBACK/DUPLICATE. 
+                // If we want the map link HERE in the frontend-generated message:
+
+                let lat, lng;
+                if (sellerData.profile?.lat && sellerData.profile?.lng) {
+                    lat = sellerData.profile.lat;
+                    lng = sellerData.profile.lng;
+                } else if (sellerData.user?.lat && sellerData.user?.lng) {
+                    lat = sellerData.user.lat;
+                    lng = sellerData.user.lng;
+                } else if (order.sellerId?.lat && order.sellerId?.lng) {
+                    lat = order.sellerId.lat;
+                    lng = order.sellerId.lng;
+                }
+
+                if (lat && lng) {
+                    mapLink = `\nMap: https://www.google.com/maps?q=${lat},${lng}`;
+                }
+
+                const pickupMsg = `Hello ${partner.fullName},\nNew Order Assigned!\n\nPICKUP FROM:\nShop: ${order.sellerId?.shopName || "Seller"}\nMobile: ${order.sellerId?.mobile}\n${mapLink}\n\nDELIVER TO:\nBuyer: ${order.buyer?.fullName || "Customer"}\nMobile: ${order.buyer?.mobile}\n\nPlease proceed immediately.`;
                 const partnerUrl = `https://wa.me/${partner.mobile}?text=${encodeURIComponent(pickupMsg)}`;
                 window.open(partnerUrl, '_blank');
 
@@ -274,7 +363,7 @@ export default function AdminOrders(props) {
         return matchesSearch;
     });
 
-    const navigate = useNavigate();
+
 
     return (
         <div className="space-y-6 animate-fade-in">
@@ -353,24 +442,19 @@ export default function AdminOrders(props) {
                                 filteredOrders.map((order) => (
                                     <tr
                                         key={order._id}
-                                        className={props.isCompletedView
-                                            ? ""
-                                            : "hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
-                                        }
-                                        onClick={() => !props.isCompletedView && navigate(`/admin/order/${order._id}`)}
+                                        className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
+                                        onClick={() => setViewOrder(order)}
                                     >
                                         <td
-                                            className={`px-6 py-4 whitespace-nowrap ${props.isCompletedView ? 'cursor-pointer group' : ''}`}
+                                            className="px-6 py-4 whitespace-nowrap group"
                                             onClick={(e) => {
-                                                if (props.isCompletedView) {
-                                                    e.stopPropagation();
-                                                    setViewOrder(order);
-                                                }
+                                                e.stopPropagation();
+                                                setViewOrder(order);
                                             }}
                                         >
                                             <div className="flex flex-col gap-1">
                                                 {order.items?.slice(0, 2).map((item, idx) => (
-                                                    <div key={idx} className={`text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2 ${props.isCompletedView ? 'group-hover:text-blue-600 transition-colors' : ''}`}>
+                                                    <div key={idx} className={`text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2 group-hover:text-blue-600 transition-colors`}>
                                                         <Package size={14} className="text-gray-400" />
                                                         <span className="truncate max-w-[150px]">{item.product?.title || "Product"}</span>
                                                         <span className="text-xs text-gray-500">x{item.quantity}</span>
@@ -381,11 +465,9 @@ export default function AdminOrders(props) {
                                                         +{order.items.length - 2} more...
                                                     </div>
                                                 )}
-                                                {props.isCompletedView && (
-                                                    <div className="text-[10px] text-gray-400 pl-6 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        Click for details
-                                                    </div>
-                                                )}
+                                                <div className="text-[10px] text-gray-400 pl-6 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    Click for details
+                                                </div>
                                             </div>
                                             <div className="text-xs text-gray-400 mt-1">Ref: {order._id?.slice(-6).toUpperCase()}</div>
                                         </td>
@@ -686,6 +768,23 @@ export default function AdminOrders(props) {
                                         </tbody>
                                         <tfoot className="bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700">
                                             <tr>
+                                                <td colSpan="3" className="px-4 py-3 text-right text-sm font-medium text-gray-500 dark:text-gray-400">Subtotal</td>
+                                                <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
+                                                    ₹{viewOrder.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0).toLocaleString()}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan="3" className="px-4 py-3 text-right text-sm font-medium text-gray-500 dark:text-gray-400">Shipping Charges</td>
+                                                <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
+                                                    {(() => {
+                                                        const subtotal = viewOrder.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || 0;
+                                                        const total = viewOrder.totalAmount || 0;
+                                                        const shipping = total - subtotal;
+                                                        return shipping > 0 ? `₹${shipping.toLocaleString()}` : "Free";
+                                                    })()}
+                                                </td>
+                                            </tr>
+                                            <tr className="border-t border-gray-100 dark:border-gray-700">
                                                 <td colSpan="3" className="px-4 py-3 text-right font-bold text-gray-700 dark:text-gray-300">Total Amount</td>
                                                 <td className="px-4 py-3 text-right font-bold text-blue-600 text-base">₹{viewOrder.totalAmount?.toLocaleString()}</td>
                                             </tr>

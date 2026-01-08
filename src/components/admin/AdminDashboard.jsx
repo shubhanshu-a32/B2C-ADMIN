@@ -11,10 +11,44 @@ export default function AdminDashboard() {
     const navigate = useNavigate();
 
     useEffect(() => {
-        api.get("/admin/stats")
-            .then((res) => setStats(res.data))
-            .catch((err) => console.error("Failed to load stats", err))
-            .finally(() => setLoading(false));
+        const fetchData = async () => {
+            try {
+                const [statsRes, analyticsRes] = await Promise.all([
+                    api.get("/admin/stats"),
+                    api.get("/admin/analytics")
+                ]);
+
+                console.log("Stats Response:", statsRes.data);
+
+                // Calculate Total Commission from Analytics Data
+                let calculatedCommission = 0;
+                if (Array.isArray(analyticsRes.data)) {
+                    calculatedCommission = analyticsRes.data.reduce((sum, record) => {
+                        const platformComm = record.platformCommission || 0;
+
+                        // Calculate Delivery Commission: Shipping Charge - Delivery Partner Fee
+                        // Ensure values are numbers and non-negative
+                        const shipping = Number(record.orderId?.shippingCharge) || 0;
+                        const partnerFee = Number(record.deliveryPartnerFee) || 0;
+                        const deliveryComm = Math.max(0, shipping - partnerFee);
+
+                        return sum + platformComm + deliveryComm;
+                    }, 0);
+                }
+
+                setStats({
+                    ...statsRes.data,
+                    totalCommission: calculatedCommission
+                });
+
+            } catch (err) {
+                console.error("Failed to load dashboard data", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
     }, []);
 
     if (loading) return (
@@ -64,9 +98,9 @@ export default function AdminDashboard() {
 
         const summaryData = [
             ["Total Revenue", `Rs ${stats.totalRevenue?.toLocaleString()}`],
+            ["Total Commission", `Rs ${stats.totalCommission?.toLocaleString() || 0}`],
             ["Total Orders", stats.totalOrders?.toString()],
-            ["Active Sellers", stats.revenueBySeller?.length?.toString()],
-            ["Products Sold", Math.floor((stats.totalOrders || 0) * 1.5).toString()]
+            ["Active Sellers", stats.revenueBySeller?.length?.toString()]
         ];
 
         doc.autoTable({
@@ -124,6 +158,12 @@ export default function AdminDashboard() {
                     color="bg-emerald-500"
                 />
                 <StatCard
+                    title="Total Commission"
+                    value={`₹${stats.totalCommission?.toLocaleString() || 0}`}
+                    icon={DollarSign}
+                    color="bg-orange-500"
+                />
+                <StatCard
                     title="Total Orders"
                     value={stats.totalOrders || 0}
                     icon={ShoppingBag}
@@ -134,12 +174,6 @@ export default function AdminDashboard() {
                     value={stats.revenueBySeller?.length || 0}
                     icon={Users}
                     color="bg-purple-500"
-                />
-                <StatCard
-                    title="Products Sold"
-                    value={Math.floor((stats.totalOrders || 0) * 1.5)} // Mock data for now
-                    icon={Package}
-                    color="bg-orange-500"
                 />
             </div>
 

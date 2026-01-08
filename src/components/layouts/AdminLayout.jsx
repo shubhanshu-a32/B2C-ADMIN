@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, User, Store, Package, LogOut, Sun, Moon, Truck, ChevronLeft, ChevronRight, CheckSquare, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, User, Store, Package, LogOut, Sun, Moon, Truck, ChevronLeft, ChevronRight, CheckSquare, Menu, X, TrendingUp } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import useThemeStore from '../../store/themeStore';
 import Logo from '../../assets/logo/Ketalog_Logo.jpeg';
@@ -18,6 +18,7 @@ export default function AdminLayout() {
 
     const navItems = [
         { path: "/admin", label: "Dashboard", icon: LayoutDashboard },
+        { path: "/admin/seller-analytics", label: "Seller Analytics", icon: TrendingUp },
         { path: "/admin/orders", label: "Orders Received", icon: Package },
         { path: "/admin/completed-orders", label: "Completed Orders", icon: CheckSquare },
         { path: "/admin/delivery", label: "Delivery Boys", icon: Truck },

@@ -7,6 +7,7 @@ import AdminUsers from './components/admin/AdminUsers';
 import AdminSellers from './components/admin/AdminSellers';
 import AdminCategories from './components/admin/AdminCategories';
 import AdminAnalytics from './components/admin/AdminAnalytics';
+import AdminSellerAnalytics from './components/admin/AdminSellerAnalytics';
 import AdminProfile from './components/admin/AdminProfile';
 import SellerShopView from './components/admin/SellerShopView';
 import AdminLogin from './components/admin/AdminLogin';
@@ -34,6 +35,7 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AdminLayout />}>
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/seller-analytics" element={<AdminSellerAnalytics />} />
             <Route path="/admin/orders" element={<AdminOrders />} />
             <Route path="/admin/completed-orders" element={<AdminOrders isCompletedView={true} />} />
             <Route path="/admin/order/:id" element={<AdminOrderDetails />} />

@@ -156,58 +156,93 @@ export default function AdminOrders(props) {
             const partner = partners.find(p => (p.userId?._id || p.userId) === partnerId);
 
             if (order && partner) {
-                // 1. Partner Message
-                // Construct Map Link if coordinates exist (check both User and Profile or wherever they are stored)
+                // --- Message Construction Logic (Aligned with Backend) ---
+
+                // 1. Determine Seller Mobile
+                let sellerMobileDisplay = "N/A";
+                if (selectedSeller && selectedSeller.profile && selectedSeller.profile.businessPhone) sellerMobileDisplay = selectedSeller.profile.businessPhone;
+                else if (selectedSeller && selectedSeller.profile && selectedSeller.profile.whatsappNumber) sellerMobileDisplay = selectedSeller.profile.whatsappNumber;
+                else if (order.sellerId && order.sellerId.mobile) sellerMobileDisplay = order.sellerId.mobile;
+
+                // 2. Determine Seller Address
+                let sellerAddressDisplay = "Address not set";
+                if (order.sellerId && order.sellerId.address) sellerAddressDisplay = order.sellerId.address;
+                else if (selectedSeller && selectedSeller.profile && selectedSeller.profile.address) sellerAddressDisplay = selectedSeller.profile.address;
+
+                // 3. Construct Map Link
                 let mapLink = "";
-                // sellerId on order might be just ID or object depending on population. 
-                // But we fetched full details in openAssignModal into selectedSeller
-                // Let's use selectedSeller if it matches the current order's seller
-
-                // Fallback to order.sellerId if selectedSeller is missing or mismatch
-                const sellerData = (selectedSeller && (selectedSeller.user?._id === (order.sellerId?._id || order.sellerId)))
-                    ? selectedSeller
-                    : { useOrder: true };
-
-                // Try to find lat/lng
-                // If it's in SellerProfile (sellerData.profile) or User (sellerData.user)
-                // Based on backend 'assignOrderToPartner' logic, it seems it expects 'lat'/'lng' directly on the populated sellerId object in Order...
-                // BUT 'getSellerById' returns { user, profile }. 
-                // Let's check where lat/lng usually lives. 'SellerProfile' likely has address/lat/lng.
-                // The prompt Code says: `order.sellerId.lat` (populated). 
-                // However, `AdminOrders.jsx` line 152 calls `api.post(...)` which triggers the backend.
-                // The frontend message is a FALLBACK/DUPLICATE. 
-                // If we want the map link HERE in the frontend-generated message:
-
-                let lat, lng;
-                if (sellerData.profile?.lat && sellerData.profile?.lng) {
-                    lat = sellerData.profile.lat;
-                    lng = sellerData.profile.lng;
-                } else if (sellerData.user?.lat && sellerData.user?.lng) {
-                    lat = sellerData.user.lat;
-                    lng = sellerData.user.lng;
-                } else if (order.sellerId?.lat && order.sellerId?.lng) {
-                    lat = order.sellerId.lat;
-                    lng = order.sellerId.lng;
+                if (order.sellerId && order.sellerId.lat && order.sellerId.lng) {
+                    mapLink = ` https://www.google.com/maps?q=${order.sellerId.lat},${order.sellerId.lng}`;
+                } else {
+                    const addrForMap = order.sellerId?.address || selectedSeller?.profile?.address;
+                    if (addrForMap) {
+                        mapLink = ` https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addrForMap)}`;
+                    }
                 }
 
-                if (lat && lng) {
-                    mapLink = `\nMap: https://www.google.com/maps?q=${lat},${lng}`;
+                // 4. Format Order Details
+                const orderDetails = order.items
+                    ?.map(item => `${item.quantity} x ${item.product?.title || "Product"}`)
+                    .join(", ");
+
+                // 5. Format Buyer Address (Robust Cleaning)
+                let buyerAddressStr = "Address not provided";
+                if (order.address) {
+                    const cleanStr = (s) => {
+                        if (!s) return "";
+                        return String(s)
+                            .replace(/\bundefined\b/gi, "")
+                            .replace(/\bnull\b/gi, "")
+                            .trim();
+                    };
+
+                    const city = cleanStr(order.address.city);
+                    // State might not be in frontend object if not populated, but keeping logic structure
+                    const pincode = cleanStr(order.address.pincode);
+                    let fullAddr = cleanStr(order.address.fullAddress);
+
+                    fullAddr = fullAddr
+                        .replace(/,\s*,/g, ",")
+                        .replace(/,\s*-/g, " -")
+                        .replace(/^,\s*/, "")
+                        .replace(/,\s*$/, "");
+
+                    if (fullAddr && fullAddr.length > 5) {
+                        buyerAddressStr = fullAddr;
+                    } else {
+                        const parts = [fullAddr, city, pincode].filter(p => p);
+                        if (parts.length > 0) buyerAddressStr = parts.join(", ");
+                    }
+
+                    buyerAddressStr = buyerAddressStr
+                        .replace(/\bundefined\b/gi, "")
+                        .replace(/,\s*,/g, ",")
+                        .replace(/\s\s+/g, " ")
+                        .trim();
                 }
 
-                const pickupMsg = `Hello ${partner.fullName},\nNew Order Assigned!\n\nPICKUP FROM:\nShop: ${order.sellerId?.shopName || "Seller"}\nMobile: ${order.sellerId?.mobile}\n${mapLink}\n\nDELIVER TO:\nBuyer: ${order.buyer?.fullName || "Customer"}\nMobile: ${order.buyer?.mobile}\n\nPlease proceed immediately.`;
+                // --- SEND MESSAGES ---
+
+                // 1. Partner Message (Matched to Backend Code)
+                const pickupMsg = `Hello ${partner.fullName},\nNew Order Assigned!\n\nPICKUP FROM:\nShop: ${order.sellerId?.shopName || "Seller"}\nMobile: ${sellerMobileDisplay}\nAddress: ${sellerAddressDisplay}${mapLink}\n\nDELIVER TO:\nBuyer: ${order.buyer?.fullName || "Customer"}\nMobile: ${order.buyer?.mobile}\nAddress: ${buyerAddressStr}\n\nPlease proceed immediately.`;
+
                 const partnerUrl = `https://wa.me/${partner.mobile}?text=${encodeURIComponent(pickupMsg)}`;
                 window.open(partnerUrl, '_blank');
 
-                // 2. Seller Message (Opened after slight delay to avoid popup blocking, but browser might still block)
-                if (order.sellerId?.mobile) {
-                    const sellerMsg = `Hello ${order.sellerId.shopName},\nOrder #${order._id.slice(-6).toUpperCase()} Assigned.\n\nDelivery Partner working on it:\nName: ${partner.fullName}\nMobile: ${partner.mobile}`;
-                    const sellerUrl = `https://wa.me/${order.sellerId.mobile}?text=${encodeURIComponent(sellerMsg)}`;
+                // 2. Seller Message
+                // Backend uses order.sellerId.mobile directly
+                const targetSellerMobile = order.sellerId?.mobile;
+
+                if (targetSellerMobile) {
+                    const sellerMsg = `Delivery boy "${partner.fullName}" coming to your address for the order "${orderDetails}" and it will deliver to "${order.buyer?.fullName || "Buyer"}, ${buyerAddressStr}".`;
+
+                    const sellerUrl = `https://wa.me/${targetSellerMobile}?text=${encodeURIComponent(sellerMsg)}`;
 
                     setTimeout(() => {
                         window.open(sellerUrl, '_blank');
                     }, 500);
                 } else {
-                    console.warn("Seller mobile not found. Ensure /orders API populates sellerId mobile.");
+                    console.warn("Seller mobile not found.");
                 }
             }
 

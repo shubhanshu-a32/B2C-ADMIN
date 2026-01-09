@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../../services/api";
-import { TrendingUp, Search, RefreshCcw, User, Store, X, Trash2, CheckCircle, Circle, DollarSign, Truck, Calendar, CheckSquare, Square } from "lucide-react";
+import { TrendingUp, Search, RefreshCcw, User, Store, X, Trash2, CheckCircle, Circle, DollarSign, Truck, Calendar, CheckSquare, Square, FileText, Sheet } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function AdminSellerAnalytics() {
@@ -196,6 +196,34 @@ export default function AdminSellerAnalytics() {
         return isDateInFilter(recordDate, filterType, selectedDate);
     });
 
+    const downloadReport = async (type) => {
+        try {
+            const params = {
+                filter: filterType,
+                date: selectedDate
+            };
+
+            const response = await api.get(`/admin/analytics/download/${type}`, {
+                params,
+                responseType: 'blob' // Important for file download
+            });
+
+            // Create a link to download the file
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `analytics_${filterType}_${selectedDate}.${type === 'excel' ? 'xlsx' : 'pdf'}`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            toast.success(`${type === 'excel' ? 'Excel' : 'PDF'} downloaded successfully`);
+        } catch (err) {
+            console.error("Download Error:", err);
+            toast.error("Failed to download report");
+        }
+    };
+
     return (
         <div className="space-y-6 animate-fade-in">
             <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
@@ -225,7 +253,6 @@ export default function AdminSellerAnalytics() {
                         <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                     </div>
 
-                    {/* Filters */}
                     <div className="flex flex-wrap items-center bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
                         {['date', 'week', 'month', 'all_time'].map((type) => (
                             <button
@@ -247,6 +274,25 @@ export default function AdminSellerAnalytics() {
                                 {type === 'all_time' ? 'All' : type === 'date' ? 'Today' : type.charAt(0).toUpperCase() + type.slice(1)}
                             </button>
                         ))}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => downloadReport('excel')}
+                            className="flex items-center gap-2 px-3 py-2 bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/30 rounded-xl transition-colors text-sm font-medium"
+                            title="Download Excel"
+                        >
+                            <Sheet size={18} />
+                            <span>Excel</span>
+                        </button>
+                        <button
+                            onClick={() => downloadReport('pdf')}
+                            className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30 rounded-xl transition-colors text-sm font-medium"
+                            title="Download PDF"
+                        >
+                            <FileText size={18} />
+                            <span>PDF</span>
+                        </button>
                     </div>
 
                     <div className="flex items-center gap-3 w-full sm:w-auto">

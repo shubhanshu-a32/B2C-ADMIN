@@ -1,9 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import api from "../../services/api";
-import { Users, ShoppingBag, DollarSign, TrendingUp, Package, ExternalLink } from "lucide-react";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
+import { Users, ShoppingBag, DollarSign, TrendingUp, ExternalLink } from "lucide-react";
 
 export default function AdminDashboard() {
     const [stats, setStats] = useState(null);
@@ -80,58 +78,7 @@ export default function AdminDashboard() {
         </div>
     );
 
-    const handleDownloadReport = () => {
-        if (!stats) return;
 
-        const doc = new jsPDF();
-
-        // Header
-        doc.setFontSize(20);
-        doc.text("Ketalog - Admin Report", 14, 20);
-
-        doc.setFontSize(10);
-        doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 28);
-
-        // Summary Stats
-        doc.setFontSize(14);
-        doc.text("Overview", 14, 40);
-
-        const summaryData = [
-            ["Total Revenue", `Rs ${stats.totalRevenue?.toLocaleString()}`],
-            ["Total Commission", `Rs ${stats.totalCommission?.toLocaleString() || 0}`],
-            ["Total Orders", stats.totalOrders?.toString()],
-            ["Active Sellers", stats.revenueBySeller?.length?.toString()]
-        ];
-
-        doc.autoTable({
-            startY: 45,
-            head: [['Metric', 'Value']],
-            body: summaryData,
-            theme: 'striped',
-            headStyles: { fillColor: [66, 133, 244] }
-        });
-
-        // Sellers Table
-        doc.text("Top Sellers Performance", 14, doc.lastAutoTable.finalY + 15);
-
-        const sellerData = stats.revenueBySeller?.map(s => [
-            s.sellerName || "Unknown",
-            s._id || "N/A",
-            s.orders,
-            `Rs ${s.total?.toLocaleString()}`,
-            "Active"
-        ]) || [];
-
-        doc.autoTable({
-            startY: doc.lastAutoTable.finalY + 20,
-            head: [['Shop Name', 'Seller ID', 'Orders', 'Revenue', 'Status']],
-            body: sellerData,
-            theme: 'grid',
-            headStyles: { fillColor: [66, 133, 244] }
-        });
-
-        doc.save("admin_report.pdf");
-    };
 
     return (
         <div className="space-y-8 animate-fade-in">
@@ -140,13 +87,7 @@ export default function AdminDashboard() {
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard Overview</h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-1">Welcome back, Admin</p>
                 </div>
-                <button
-                    onClick={handleDownloadReport}
-                    className="px-4 py-2 bg-black dark:bg-white text-white dark:text-black text-sm font-semibold rounded-lg hover:opacity-80 transition flex items-center gap-2"
-                >
-                    <Package size={16} />
-                    Download Report
-                </button>
+
             </div>
 
             {/* Stats Grid */}

@@ -86,7 +86,7 @@ export default function SellerShopView() {
                 </button>
             </nav>
 
-            <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+            <main className="w-full mx-auto p-4 md:p-6 space-y-6">
 
                 {/* Shop Banner Card - Integrated User's Hero structure into Dark Theme */}
                 <div className="bg-[#1f2937] rounded-3xl overflow-hidden shadow-2xl border border-gray-800 relative">
@@ -154,13 +154,17 @@ export default function SellerShopView() {
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white">Products ({products.length})</h2>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
                         {products.map(product => (
-                            <div key={product._id} className="bg-white dark:bg-[#1f2937] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 transition group hover:shadow-xl">
+                            <div key={product._id} className="bg-white dark:bg-[#1f2937] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 transition group hover:shadow-xl block">
                                 {/* Image Placeholder */}
                                 <div className="h-48 bg-gray-100 dark:bg-[#374151] flex items-center justify-center relative">
-                                    {product.images && product.images[0] ? (
-                                        <img src={product.images[0].url} alt={product.title} className="w-full h-full object-cover" />
+                                    {product.images && (product.images[0]?.url || product.images[0]) ? (
+                                        <img
+                                            src={product.images[0].url || product.images[0]}
+                                            alt={product.title}
+                                            className="w-full h-full object-cover"
+                                        />
                                     ) : (
                                         <div className="text-gray-400 flex flex-col items-center">
                                             <span className="text-xs">No Image</span>
@@ -179,16 +183,11 @@ export default function SellerShopView() {
                                     <p className="text-gray-500 dark:text-gray-400 text-xs line-clamp-1 mb-4">{product.description || product.category?.name}</p>
                                     <hr className="border-gray-200 dark:border-gray-700 mb-4" />
 
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between mt-2">
                                         <span className="text-blue-600 dark:text-blue-400 font-bold text-lg">₹{product.price}</span>
-
-                                        <div className="flex gap-2">
-                                            <button className="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white text-xs font-semibold transition w-full">
-                                                Buy Now
-                                            </button>
-                                        </div>
                                     </div>
                                 </div>
+
                             </div>
                         ))}
                         {products.length === 0 && (

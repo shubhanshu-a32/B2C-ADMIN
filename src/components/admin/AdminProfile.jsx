@@ -105,7 +105,7 @@ export default function AdminProfile() {
                                             value={formData.mobile}
                                             onChange={handleChange}
                                             placeholder="Enter mobile number"
-                                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition"
+                                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition text-gray-900 dark:text-white"
                                         />
                                     </div>
                                 </div>
@@ -127,7 +127,7 @@ export default function AdminProfile() {
                                         value={formData.currentPassword}
                                         onChange={handleChange}
                                         placeholder="Required to set new password"
-                                        className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition"
+                                        className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition text-gray-900 dark:text-white"
                                     />
                                 </div>
 
@@ -140,7 +140,7 @@ export default function AdminProfile() {
                                             value={formData.newPassword}
                                             onChange={handleChange}
                                             placeholder="Min 6 chars"
-                                            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition"
+                                            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition text-gray-900 dark:text-white"
                                         />
                                     </div>
                                     <div>
@@ -151,7 +151,7 @@ export default function AdminProfile() {
                                             value={formData.confirmPassword}
                                             onChange={handleChange}
                                             placeholder="Re-enter new password"
-                                            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition"
+                                            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition text-gray-900 dark:text-white"
                                         />
                                     </div>
                                 </div>

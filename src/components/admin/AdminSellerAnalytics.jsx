@@ -200,7 +200,8 @@ export default function AdminSellerAnalytics() {
         try {
             const params = {
                 filter: filterType,
-                date: selectedDate
+                date: selectedDate,
+                search: searchTerm
             };
 
             const response = await api.get(`/admin/analytics/download/${type}`, {

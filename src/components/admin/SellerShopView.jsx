@@ -20,7 +20,9 @@ export default function SellerShopView() {
         const fetchData = async () => {
             try {
                 const profileRes = await api.get(`/seller/profile/${id}`);
-                setSeller(profileRes.data);
+                // Flatten the response: Merge user and profile data
+                const { user, profile } = profileRes.data;
+                setSeller({ ...user, ...profile });
 
                 const productsRes = await api.get(`/products?seller=${id}`);
                 const pData = Array.isArray(productsRes.data) ? productsRes.data : (productsRes.data.data || []);
@@ -104,10 +106,18 @@ export default function SellerShopView() {
                     <div className="px-6 pb-6 md:px-10 md:pb-8 relative">
                         <div className="flex flex-col md:flex-row items-start gap-6 -mt-12">
                             {/* Avatar */}
-                            <div className="h-24 w-24 rounded-2xl bg-[#1f2937] p-1 shadow-md border-4 border-[#1f2937]">
-                                <div className="h-full w-full rounded-xl bg-[#2d3748] flex items-center justify-center text-blue-500">
-                                    <Store size={40} />
-                                </div>
+                            <div className="h-24 w-24 rounded-2xl bg-[#1f2937] p-1 shadow-md border-4 border-[#1f2937] overflow-hidden">
+                                {seller.profilePicture ? (
+                                    <img
+                                        src={seller.profilePicture}
+                                        alt={seller.shopName}
+                                        className="h-full w-full object-cover rounded-xl"
+                                    />
+                                ) : (
+                                    <div className="h-full w-full rounded-xl bg-[#2d3748] flex items-center justify-center text-blue-500">
+                                        <Store size={40} />
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex-1 pt-2 md:pt-14">

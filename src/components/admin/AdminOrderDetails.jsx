@@ -16,7 +16,6 @@ export default function AdminOrderDetails() {
                 const res = await api.get(`/admin/orders/${id}`);
                 setOrder(res.data);
             } catch (err) {
-                console.error(err);
                 toast.error("Failed to load order details");
             } finally {
                 setLoading(false);

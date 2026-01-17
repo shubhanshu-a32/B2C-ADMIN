@@ -23,23 +23,26 @@ export default function AdminSellerAnalytics() {
     const [viewRecord, setViewRecord] = useState(null);
 
     useEffect(() => {
-        // When filter changes, we just ensure data is there. The filtering happens in render.
-        // We always fetch 'all' now to ensure client-side filtering works robustly.
-        if (analyticsData.length === 0) fetchAnalytics(false);
+        fetchAnalytics(false);
 
         const interval = setInterval(() => {
             fetchAnalytics(false, true); // Polling fetch
-        }, 10000); // 10 seconds
+        }, 10000);
 
         return () => clearInterval(interval);
-    }, []); // Only mount
+    }, [filterType, selectedDate, searchTerm]); // Fetch on filter change
 
     const fetchAnalytics = async (isManual = false, isPolling = false) => {
         if (!isPolling) setLoading(true);
         try {
-            // Fetch ALL data and filter client-side to ensure accuracy regardless of backend timezone/logic
-            const res = await api.get("/admin/analytics", { params: {} });
-            console.log("Fetching Analytics (Client Side Filtering Mode)");
+            // Fetch with filters
+            const params = {
+                filter: filterType,
+                date: selectedDate,
+                search: searchTerm
+            };
+            const res = await api.get("/admin/analytics", { params });
+
 
             if (Array.isArray(res.data)) {
                 // Map Backend Status (COMPLETED/PENDING) to Frontend Boolean
@@ -58,14 +61,12 @@ export default function AdminSellerAnalytics() {
                 setAnalyticsData(data);
                 if (isManual) toast.success("Analytics Refreshed");
             } else {
-                console.error("Unexpected response format:", res.data);
                 if (!isPolling) {
                     setAnalyticsData([]);
                     toast.error("Received invalid data from server");
                 }
             }
         } catch (err) {
-            console.error("Fetch Error:", err);
             if (!isPolling) toast.error("Failed to fetch analytics data");
         } finally {
             if (!isPolling) setLoading(false);
@@ -79,7 +80,6 @@ export default function AdminSellerAnalytics() {
             setAnalyticsData(prev => prev.filter(item => item._id !== id));
             toast.success("Record deleted successfully");
         } catch (err) {
-            console.error("Delete Error:", err);
             toast.error("Failed to delete record");
         }
     };
@@ -112,7 +112,6 @@ export default function AdminSellerAnalytics() {
             });
             toast.success("Status updated");
         } catch (err) {
-            console.error("Update Status Error:", err);
             toast.error("Failed to update status on server");
             // Revert on error
             setAnalyticsData(prev => prev.map(r => {
@@ -125,7 +124,12 @@ export default function AdminSellerAnalytics() {
     };
 
     // Helper to extract commission string from nested order items
-    const getCommissionString = (order) => {
+    // Helper to extract commission string from nested order items
+    // UPDATED: Now mostly redundant as backend sends totalCommissionPercentage, but kept for fallback
+    const getCommissionString = (record) => {
+        if (record.totalCommissionPercentage !== undefined) return record.totalCommissionPercentage + "%";
+        // Fallback to order items if missing
+        const order = record.orderId;
         if (!order || !order.items || !Array.isArray(order.items)) return "0%";
         const uniqueComms = [];
         order.items.forEach(item => {
@@ -173,28 +177,8 @@ export default function AdminSellerAnalytics() {
         return true;
     };
 
-    const filteredAnalytics = analyticsData.filter(record => {
-        if (!record) return false;
-        const orderId = record.orderId ? (record.orderId._id || "") : "";
-        const shopName = record.sellerId ? (record.sellerId.shopName || "") : "";
-        const searchLower = searchTerm.toLowerCase();
-
-        const matchesSearch = (
-            orderId.toLowerCase().includes(searchLower) ||
-            shopName.toLowerCase().includes(searchLower)
-        );
-
-        if (!matchesSearch) return false;
-
-        // DATE FILTER (Client Side Logic)
-        if (filterType === 'all_time') return true;
-
-        // Use record.createdAt or fallback to order.createdAt
-        // This handles cases where SellerAnalytics records might miss 'createdAt' due to backend bugs
-        const recordDate = record.createdAt || (record.orderId ? record.orderId.createdAt : null);
-
-        return isDateInFilter(recordDate, filterType, selectedDate);
-    });
+    // Data is now filtered from backend
+    const filteredAnalytics = analyticsData;
 
     const downloadReport = async (type) => {
         try {
@@ -220,7 +204,6 @@ export default function AdminSellerAnalytics() {
 
             toast.success(`${type === 'excel' ? 'Excel' : 'PDF'} downloaded successfully`);
         } catch (err) {
-            console.error("Download Error:", err);
             toast.error("Failed to download report");
         }
     };
@@ -513,7 +496,7 @@ export default function AdminSellerAnalytics() {
                                 </h4>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
                                     <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
-                                        <div className="text-gray-500 dark:text-gray-400 text-xs mb-1">Commission ({viewRecord.totalCommissionPercentage ? viewRecord.totalCommissionPercentage + '%' : getCommissionString(viewRecord.orderId)})</div>
+                                        <div className="text-gray-500 dark:text-gray-400 text-xs mb-1">Commission ({viewRecord.totalCommissionPercentage ? viewRecord.totalCommissionPercentage + '%' : getCommissionString(viewRecord)})</div>
                                         <div className="text-green-600 font-bold">₹{viewRecord.platformCommission?.toLocaleString()}</div>
                                     </div>
                                     <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">

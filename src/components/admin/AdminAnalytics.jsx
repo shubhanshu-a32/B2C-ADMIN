@@ -9,7 +9,9 @@ export default function AdminAnalytics() {
     useEffect(() => {
         api.get("/admin/stats")
             .then((res) => setStats(res.data))
-            .catch((err) => console.error("Failed to load analytics", err))
+            .catch((err) => {
+                toast.error("Failed to load analytics");
+            })
             .finally(() => setLoading(false));
     }, []);
 

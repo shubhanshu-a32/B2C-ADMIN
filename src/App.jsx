@@ -14,6 +14,8 @@ import AdminLogin from './components/admin/AdminLogin';
 import AdminOrders from './components/admin/AdminOrders';
 import AdminOrderDetails from './components/admin/AdminOrderDetails';
 import AdminDelivery from './components/admin/AdminDelivery';
+import AdminOffers from './components/admin/AdminOffers';
+import AdminVariantsManager from './components/admin/AdminVariantsManager';
 import AdminLayout from './components/layouts/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css'
@@ -43,6 +45,8 @@ function App() {
             <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="/admin/sellers" element={<AdminSellers />} />
             <Route path="/admin/categories" element={<AdminCategories />} />
+            <Route path="/admin/offers" element={<AdminOffers />} />
+            <Route path="/admin/variants" element={<AdminVariantsManager />} />
             <Route path="/admin/analytics" element={<AdminAnalytics />} />
             <Route path="/admin/profile" element={<AdminProfile />} />
           </Route>

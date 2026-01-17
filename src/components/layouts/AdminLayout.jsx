@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, User, Store, Package, LogOut, Sun, Moon, Truck, ChevronLeft, ChevronRight, CheckSquare, Menu, X, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Users, User, Store, Package, LogOut, Sun, Moon, Truck, ChevronLeft, ChevronRight, CheckSquare, Menu, X, TrendingUp, Layers } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import useThemeStore from '../../store/themeStore';
 import Logo from '../../assets/logo/Ketalog_Logo.jpeg';
@@ -25,6 +25,8 @@ export default function AdminLayout() {
         { path: "/admin/users", label: "Buyer Management", icon: Users },
         { path: "/admin/sellers", label: "Seller Management", icon: Store },
         { path: "/admin/categories", label: "Categories", icon: Store },
+        { path: "/admin/variants", label: "Variants", icon: Layers },
+        { path: "/admin/offers", label: "Offers", icon: Package }, // Using Package icon as placeholder or Ticket if available
         { path: "/admin/profile", label: "Profile", icon: User },
     ];
 

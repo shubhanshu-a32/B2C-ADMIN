@@ -27,7 +27,7 @@ export default function AdminCategories() {
     const loadCategories = () => {
         api.get("/categories")
             .then((res) => setCategories(res.data))
-            .catch((err) => console.error(err))
+            .catch((err) => toast.error("Failed to load categories"))
             .finally(() => setLoading(false));
     };
 
@@ -63,7 +63,6 @@ export default function AdminCategories() {
             toast.success("Category deleted");
             loadCategories();
         } catch (err) {
-            console.error(err);
             toast.error("Failed to delete category");
         }
     };
@@ -75,8 +74,7 @@ export default function AdminCategories() {
             toast.success("Subcategory deleted");
             loadCategories();
         } catch (err) {
-            console.error(err);
-            toast.error("Failed to delete subcategory");
+            toast.error("Failed to create category");
         }
     };
 

@@ -86,7 +86,7 @@ export default function AdminSellers() {
                     <input
                         type="text"
                         placeholder="Search sellers..."
-                        className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+                        className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
                     />
                 </div>
                 <button className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition">
@@ -102,56 +102,56 @@ export default function AdminSellers() {
                         <table className="w-full text-left">
                             <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
                                 <tr>
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Shop Details</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Contact Info</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Joined Date</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right whitespace-nowrap">Actions</th>
+                                    <th className="px-4 py-3 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Shop Details</th>
+                                    <th className="px-4 py-3 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Contact Info</th>
+                                    <th className="px-4 py-3 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Joined Date</th>
+                                    <th className="px-4 py-3 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right whitespace-nowrap">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                                 {sellers.map((seller) => (
                                     <tr key={seller._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition duration-150">
-                                        <td className="px-6 py-4 whitespace-nowrap">
+                                        <td className="px-4 py-3 whitespace-nowrap">
                                             <div className="flex items-center">
-                                                <div className="h-12 w-12 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400 font-bold mr-4">
-                                                    <Store size={24} />
+                                                <div className="h-10 w-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400 font-bold mr-3">
+                                                    <Store size={20} />
                                                 </div>
                                                 <div>
-                                                    <div className="font-semibold text-gray-900 dark:text-white text-base">{seller.shopName || "Unnamed Shop"}</div>
+                                                    <div className="font-semibold text-gray-900 dark:text-white text-sm">{seller.shopName || "Unnamed Shop"}</div>
                                                     <Link
                                                         to={`/buyer/seller/${seller.userId?._id}`}
-                                                        className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1 mt-0.5"
+                                                        className="text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-1 mt-0.5"
                                                     >
                                                         View Shop Front <ExternalLink size={10} />
                                                     </Link>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                            <div className="text-xs font-medium text-gray-900 dark:text-white">
                                                 {seller.userId?.mobile || "N/A"}
                                             </div>
-                                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                                            <div className="text-[10px] text-gray-500 dark:text-gray-400">
                                                 ID: {seller.userId?._id}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                                             {new Date(seller.createdAt).toLocaleDateString()}
                                         </td>
-                                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                                        <td className="px-4 py-3 text-right whitespace-nowrap">
                                             <button
                                                 onClick={() => deleteSeller(seller.userId?._id)}
                                                 className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                                                 title="Delete Seller Details & Account"
                                             >
-                                                <Trash2 size={18} />
+                                                <Trash2 size={16} />
                                             </button>
                                         </td>
                                     </tr>
                                 ))}
                                 {sellers.length === 0 && (
                                     <tr>
-                                        <td colSpan="4" className="text-center py-12 text-gray-500">
+                                        <td colSpan="4" className="text-center py-10 text-gray-500 text-sm">
                                             No sellers found.
                                         </td>
                                     </tr>

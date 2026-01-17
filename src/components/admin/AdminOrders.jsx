@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import api from "../../services/api";
 import { Package, Search, Calendar, User, Store, Trash2, Truck, CheckCircle, Bell, Eye, X } from "lucide-react";
@@ -32,7 +32,7 @@ export default function AdminOrders(props) {
             const res = await api.get("/admin/delivery-partners");
             setPartners(res.data);
         } catch (err) {
-            console.error("Failed to fetch partners", err);
+            toast.error("Failed to fetch delivery partners");
         }
     };
 
@@ -59,7 +59,6 @@ export default function AdminOrders(props) {
                 if (isManual) toast.success("Orders updated");
             }
         } catch (err) {
-            console.error(err);
             if (!isPolling) toast.error("Failed to fetch orders");
         } finally {
             if (!isPolling) setLoading(false);
@@ -73,7 +72,6 @@ export default function AdminOrders(props) {
             setOrders(orders.filter(order => order._id !== id));
             toast.success("Order deleted successfully");
         } catch (err) {
-            console.error(err);
             toast.error("Failed to delete order");
         }
     };
@@ -91,8 +89,9 @@ export default function AdminOrders(props) {
             // 2. Fetch Seller Profile to get Pincode
             // Check if sellerId is populated object or just ID
             let sellerId = order.sellerId;
-            if (sellerId && typeof sellerId === 'object' && sellerId._id) {
-                sellerId = sellerId._id;
+            // Extract ID if it's an object
+            if (sellerId && typeof sellerId === 'object') {
+                sellerId = sellerId._id || sellerId.id;
             }
 
             if (!sellerId) {
@@ -100,227 +99,379 @@ export default function AdminOrders(props) {
                 return;
             }
 
-            const sellerRes = await api.get(`/admin/sellers/${sellerId}`);
-            if (sellerRes.data) {
-                // Store full seller details (User + Profile)
-                setSelectedSeller(sellerRes.data);
-            }
 
-            // Logic to find pincode: 
-            // The backend for getSellerById returns { user, profile, orders }
-            // Profile usually has pincode.
-            const sellerPincode = sellerRes.data.profile?.pincode;
 
-            if (!sellerPincode) {
-                toast.error("Seller does not have a pincode set. Cannot filter partners.");
-                // We will fetch all and show empty, or just show warning.
-                setPartners([]); // Strict adherence
+            // 2. Use Seller Pincode from Order (Optimized: Backend now provides this)
+            const sellerPincode = order.sellerId?.pincode;
+
+            // Set Selected Seller from order data directly
+            // Backend provides populated sellerId with ShopName etc.
+            // We might lack full profile but that's okay for basic display or we use what's there.
+            setSelectedSeller(order.sellerId);
+
+            // 3. Fetch Delivery Partners (Filter by Pincode Server-Side)
+            try {
+                const queryParams = sellerPincode ? { pincode: sellerPincode } : {};
+                const res = await api.get("/admin/delivery-partners", { params: queryParams });
+
+                setPartners(res.data);
+
+                if (sellerPincode) {
+                    if (res.data.length === 0) {
+                        toast("No delivery partners found for PIN: " + sellerPincode, { icon: '⚠️' });
+                    } else {
+                        // Optional: Success toast or just show list
+                    }
+                } else {
+                    toast("Seller has no Pincode. Showing all partners.", { icon: 'ℹ️' });
+                }
+
                 setShowAssignModal(true);
-                return;
-            }
-            const res = await api.get("/admin/delivery-partners");
-            const allPartners = res.data;
-            const normalizedSellerPin = String(sellerPincode).trim();
 
-            const validPartners = allPartners.filter(p => {
-                if (!p.pincode) return false;
-                return String(p.pincode).trim() === normalizedSellerPin;
-            });
-
-            setPartners(validPartners);
-            setShowAssignModal(true);
-
-            if (validPartners.length === 0) {
-                toast("No delivery partners found for PIN: " + normalizedSellerPin, { icon: '⚠️' });
+            } catch (partnerErr) {
+                toast.error("Failed to load delivery partners");
             }
 
         } catch (err) {
-            console.error("Assign Modal Error:", err);
-            toast.error("Failed to load suitable delivery partners");
+            // Console error removed
+            toast.error("An error occurred opening the modal");
         }
     };
 
-    const assignPartner = async (partnerId) => {
+    // --- SHARED HELPER: Generate WhatsApp Content Frontend-Side (Strict Backend Sync) ---
+    const getWhatsAppContent = (order, partner, useNewFormat = false) => {
+        if (!order || !partner) return { pickupMsg: "", sellerMsg: "", pMobile: "", sMobile: "" };
+
+        // 1. Resolve Partner Mobile (Explicitly)
+        const partnerMobileRaw = partner.mobile || partner.userId?.mobile;
+
+        // 2. Resolve Seller Info (Explicitly)
+        const sellerUser = order.sellerId || {};
+        // Backend overrides: Profile > User
+        const sellerMobileRaw = sellerUser.profile?.businessPhone || sellerUser.profile?.whatsappNumber || sellerUser.mobile || sellerUser.profile?.mobile;
+        // Fallback or "N/A" only for display usage, but keep raw for check
+        const sMobile = sellerMobileRaw || "N/A";
+        const pMobile = partnerMobileRaw || "N/A";
+
+        const pName = partner.fullName || partner.userId?.fullName || "Partner";
+        const shopName = sellerUser.shopName || sellerUser.ownerName || "Unknown Shop";
+        const sAddress = sellerUser.profile?.address || sellerUser.address || "Address not set";
+
+        // Google Maps Link
+        let mapLink = "";
+        if (sellerUser.lat && sellerUser.lng) {
+            mapLink = ` https://www.google.com/maps?q=${sellerUser.lat},${sellerUser.lng}`;
+        } else if (sAddress && sAddress !== "Address not set") {
+            const cleanAddr = sAddress.replace(/\s+/g, '+');
+            mapLink = ` https://www.google.com/maps/search/?api=1&query=${cleanAddr}`;
+        }
+
+        // 3. Buyer Address (Strict Backend Cleaning Logic)
+        let buyerAddressStr = "Address not provided";
+        if (order.address) {
+            const cleanStr = (s) => s ? String(s).replace(/\bundefined\b/gi, "").replace(/\bnull\b/gi, "").trim() : "";
+            const city = cleanStr(order.address.city);
+            const pincode = cleanStr(order.address.pincode);
+            let fullAddr = cleanStr(order.address.fullAddress);
+            // Regex cleanups from backend
+            fullAddr = fullAddr.replace(/,\s*,/g, ",").replace(/,\s*-/g, " -").replace(/^,\s*/, "").replace(/,\s*$/, "");
+
+            if (fullAddr && fullAddr.length > 5) {
+                buyerAddressStr = fullAddr;
+            } else {
+                const parts = [fullAddr, city, pincode].filter(p => p);
+                if (parts.length > 0) buyerAddressStr = parts.join(", ");
+            }
+            buyerAddressStr = buyerAddressStr.replace(/\bundefined\b/gi, "").replace(/\s\s+/g, " ").trim();
+        }
+
+        // 4. Order Details
+        const orderDetails = order.items?.map((item, idx) =>
+            `${idx + 1}. ${item.product?.title || "Unknown Product"} x ${item.quantity} (₹${item.price || 0})`
+        ).join("\n") || "";
+
+        const extraDetails = `Total: ₹${order.totalAmount}\nPayment: ${order.paymentMode || 'COD'}\nOrder ID: ${order._id}`;
+        const buyerName = order.buyer?.fullName || "Guest/Unknown";
+        const buyerMobile = order.buyer?.mobile || "N/A";
+
+        // 5. Construct Messages (Strict Backend Match)
+
+        // Message TO Partner (pickupMsg)
+        // Backend: "Mobile: ${sellerMobileDisplay}\nAddress: ${sellerAddressDisplay}\nLocation: ${mapLink}"
+        // Note: Backend has space after "Location:"
+        const pickupMsg = `Hello ${pName},\nNew Order Assigned!\n\nORDER ID: ${order._id}\n\nPICKUP FROM:\nShop: ${shopName}\nMobile: ${sMobile}\nAddress: ${sAddress}\nLocation: ${mapLink}\n\nDELIVER TO:\nBuyer: ${buyerName}\nMobile: ${buyerMobile}\nAddress: ${buyerAddressStr}\n\nITEMS:\n${orderDetails}\n\n${extraDetails}\n\nPlease proceed immediately.`;
+
+        // Message TO Seller (sellerMsg)
+        let sellerMsg;
+        if (useNewFormat) {
+            sellerMsg = `Hello seller ${shopName},\ndelivery partner is assigned ${pName}, ${pMobile} to deliver ${orderDetails} to ${buyerName}, ${buyerMobile}, ${buyerAddressStr}. So, please ready the above product to give it to delivery partner.\nThank You!!`;
+        } else {
+            // Backend: "Hello ${sellerUser.shopName || "Seller"},\nDelivery Partner ${partner.fullName} (${partner.mobile}) is assigned and coming to take the product:\n\n${orderDetails}\n\nTo deliver to Buyer: ${buyerName}\nMobile: ${buyerMobile}\nAddress: ${buyerAddressStr}\n\n${extraDetails}"
+            sellerMsg = `Hello ${shopName},\nDelivery Partner ${pName} (${pMobile}) is assigned and coming to take the product:\n\n${orderDetails}\n\nTo deliver to Buyer: ${buyerName}\nMobile: ${buyerMobile}\nAddress: ${buyerAddressStr}\n\n${extraDetails}`;
+        }
+
+        return { pickupMsg, sellerMsg, pMobile, sMobile };
+    };
+
+    // Helper to format mobile
+    const formatMobile = (num) => {
+        if (!num) return "";
+        let cleaned = String(num).replace(/\D/g, '');
+        if (cleaned.length === 10) return '91' + cleaned;
+        return cleaned;
+    };
+
+
+    const assignPartner = async (partnerIdInput) => {
+        // Pre-open windows to bypass popup blockers
+        const partnerWindow = window.open('', '_blank');
+        const sellerWindow = window.open('', '_blank');
+
+        if (partnerWindow) partnerWindow.document.write("<h3>Generating WhatsApp Link...</h3><p>Please wait...</p>");
+        if (sellerWindow) sellerWindow.document.write("<h3>Generating WhatsApp Link...</h3><p>Please wait...</p>");
+
+        // Normalization: Handle if partnerIdInput is an object or string
+        const partnerId = (typeof partnerIdInput === 'object' && partnerIdInput !== null)
+            ? (partnerIdInput._id || partnerIdInput.userId?._id || partnerIdInput.userId)
+            : partnerIdInput;
+
+        // --- OPTIMISTIC UI ---
         try {
-            // 1. Assign in Backend
-            await api.post(`/admin/orders/${selectedOrderId}/assign`, { partnerId });
+            let selectedOrder = orders.find(o => o._id === selectedOrderId);
+            if (!selectedOrder) throw new Error("Order not found");
 
-            // 2. Open WhatsApp (Frontend-side fallback/confirmation)
-            // We need order and partner details. 
-            // Note: address details depend on what `getAllOrders` returned.
-            // If address is missing in frontend state, the message will be limited.
-            // WARNING: Browsers may block multiple pop-ups. The first one is usually allowed.
-            const order = orders.find(o => o._id === selectedOrderId);
+            // Resolve Partner
+            const selectedPartner = partners.find(p => p._id === partnerId || p.userId?._id === partnerId || p.userId === partnerId);
+            if (!selectedPartner) throw new Error("Partner not found locally");
 
-            // FIX: partnerId passed is the User ID, but partners array has Profile objects.
-            const partner = partners.find(p => (p.userId?._id || p.userId) === partnerId);
+            // --- FETCH OVERRIDE IF DATA MISSING ---
+            // If Seller Mobile is missing, fetch full seller details
+            let sellerUser = selectedOrder.sellerId || {};
+            const sellerHasMobile = sellerUser.profile?.businessPhone || sellerUser.profile?.whatsappNumber || sellerUser.mobile || sellerUser.profile?.mobile;
 
-            if (order && partner) {
-                // --- Message Construction Logic (Aligned with Backend) ---
-
-                // 1. Determine Seller Mobile
-                let sellerMobileDisplay = "N/A";
-                if (selectedSeller && selectedSeller.profile && selectedSeller.profile.businessPhone) sellerMobileDisplay = selectedSeller.profile.businessPhone;
-                else if (selectedSeller && selectedSeller.profile && selectedSeller.profile.whatsappNumber) sellerMobileDisplay = selectedSeller.profile.whatsappNumber;
-                else if (order.sellerId && order.sellerId.mobile) sellerMobileDisplay = order.sellerId.mobile;
-
-                // 2. Determine Seller Address
-                let sellerAddressDisplay = "Address not set";
-                if (order.sellerId && order.sellerId.address) sellerAddressDisplay = order.sellerId.address;
-                else if (selectedSeller && selectedSeller.profile && selectedSeller.profile.address) sellerAddressDisplay = selectedSeller.profile.address;
-
-                // 3. Construct Map Link
-                let mapLink = "";
-                if (order.sellerId && order.sellerId.lat && order.sellerId.lng) {
-                    mapLink = ` https://www.google.com/maps?q=${order.sellerId.lat},${order.sellerId.lng}`;
-                } else {
-                    const addrForMap = order.sellerId?.address || selectedSeller?.profile?.address;
-                    if (addrForMap) {
-                        mapLink = ` https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addrForMap)}`;
-                    }
-                }
-
-                // 4. Format Order Details
-                const orderDetails = order.items
-                    ?.map(item => `${item.quantity} x ${item.product?.title || "Product"}`)
-                    .join(", ");
-
-                // 5. Format Buyer Address (Robust Cleaning)
-                let buyerAddressStr = "Address not provided";
-                if (order.address) {
-                    const cleanStr = (s) => {
-                        if (!s) return "";
-                        return String(s)
-                            .replace(/\bundefined\b/gi, "")
-                            .replace(/\bnull\b/gi, "")
-                            .trim();
+            if (!sellerHasMobile && sellerUser._id) {
+                try {
+                    const sellerRes = await api.get(`/admin/sellers/${sellerUser._id}`);
+                    // Merge fetched data into a temporary object structure that getWhatsAppContent expects
+                    const fullSeller = {
+                        ...sellerUser,
+                        ...sellerRes.data.user,
+                        profile: sellerRes.data.profile
                     };
-
-                    const city = cleanStr(order.address.city);
-                    // State might not be in frontend object if not populated, but keeping logic structure
-                    const pincode = cleanStr(order.address.pincode);
-                    let fullAddr = cleanStr(order.address.fullAddress);
-
-                    fullAddr = fullAddr
-                        .replace(/,\s*,/g, ",")
-                        .replace(/,\s*-/g, " -")
-                        .replace(/^,\s*/, "")
-                        .replace(/,\s*$/, "");
-
-                    if (fullAddr && fullAddr.length > 5) {
-                        buyerAddressStr = fullAddr;
-                    } else {
-                        const parts = [fullAddr, city, pincode].filter(p => p);
-                        if (parts.length > 0) buyerAddressStr = parts.join(", ");
-                    }
-
-                    buyerAddressStr = buyerAddressStr
-                        .replace(/\bundefined\b/gi, "")
-                        .replace(/,\s*,/g, ",")
-                        .replace(/\s\s+/g, " ")
-                        .trim();
-                }
-
-                // --- SEND MESSAGES ---
-
-                // 1. Partner Message (Matched to Backend Code)
-                const pickupMsg = `Hello ${partner.fullName},\nNew Order Assigned!\n\nPICKUP FROM:\nShop: ${order.sellerId?.shopName || "Seller"}\nMobile: ${sellerMobileDisplay}\nAddress: ${sellerAddressDisplay}${mapLink}\n\nDELIVER TO:\nBuyer: ${order.buyer?.fullName || "Customer"}\nMobile: ${order.buyer?.mobile}\nAddress: ${buyerAddressStr}\n\nPlease proceed immediately.`;
-
-                const partnerUrl = `https://wa.me/${partner.mobile}?text=${encodeURIComponent(pickupMsg)}`;
-                window.open(partnerUrl, '_blank');
-
-                // 2. Seller Message
-                // Backend uses order.sellerId.mobile directly
-                const targetSellerMobile = order.sellerId?.mobile;
-
-                if (targetSellerMobile) {
-                    const sellerMsg = `Delivery boy "${partner.fullName}" coming to your address for the order "${orderDetails}" and it will deliver to "${order.buyer?.fullName || "Buyer"}, ${buyerAddressStr}".`;
-
-                    const sellerUrl = `https://wa.me/${targetSellerMobile}?text=${encodeURIComponent(sellerMsg)}`;
-
-                    setTimeout(() => {
-                        window.open(sellerUrl, '_blank');
-                    }, 500);
-                } else {
-                    console.warn("Seller mobile not found.");
+                    // Create a new order object with enriched seller
+                    selectedOrder = { ...selectedOrder, sellerId: fullSeller };
+                } catch (fetchErr) {
+                    // Minimal fallback
                 }
             }
+            // --------------------------------------
 
-            toast.success("Order assigned! WhatsApp tabs opened.");
+            // --- PINCODE MISMATCH GUARD ---
+            const sellerPincode = String(selectedOrder.sellerId?.pincode || "").trim();
+            const partnerPincode = String(selectedPartner.pincode || "").trim();
+
+            if (sellerPincode && partnerPincode && sellerPincode !== partnerPincode) {
+                const msg = `PINCODE MISMATCH!\n\nSeller: ${sellerPincode}\nPartner: ${partnerPincode}\n\nThe system will likely REJECT this assignment.`;
+                if (partnerWindow) partnerWindow.document.body.innerHTML = `<h3>Blocked</h3><p>${msg.replace(/\n/g, '<br/>')}</p>`;
+                if (sellerWindow) sellerWindow.document.body.innerHTML = `<h3>Blocked</h3><p>${msg.replace(/\n/g, '<br/>')}</p>`;
+                toast.error(msg);
+                throw new Error("Pincode Mismatch Blocked");
+            }
+            // -----------------------------
+
+            // Generate Content
+            const { pickupMsg, sellerMsg, pMobile, sMobile } = getWhatsAppContent(selectedOrder, selectedPartner);
+
+            // Redirect Optimistically
+            const safePartnerMobile = formatMobile(pMobile);
+            if (safePartnerMobile && pickupMsg) {
+                if (partnerWindow) partnerWindow.location.href = `https://api.whatsapp.com/send?phone=${safePartnerMobile}&text=${encodeURIComponent(pickupMsg)}`;
+            } else {
+                if (partnerWindow) partnerWindow.document.body.innerHTML = `<h3>Error</h3><p>Missing Mobile (Partner: ${pMobile})</p>`;
+            }
+
+            const safeSellerMobile = formatMobile(sMobile);
+            if (safeSellerMobile && sellerMsg) {
+                if (sellerWindow) sellerWindow.location.href = `https://api.whatsapp.com/send?phone=${safeSellerMobile}&text=${encodeURIComponent(sellerMsg)}`;
+            } else {
+                if (sellerWindow) sellerWindow.document.body.innerHTML = `<h3>Error</h3><p>Missing Mobile (Seller: ${sMobile})</p>`;
+            }
+
+            // Close Modal & Show Success
             setShowAssignModal(false);
-            fetchOrders();
+            toast.success("Opening WhatsApps...");
+
+            // Background API
+            const res = await api.post(`/admin/orders/${selectedOrderId}/assign`, { partnerId });
+
+            // Safe Optimistic Update (Preserving Populated Data)
+            if (res.data.order) {
+                setOrders(prev => prev.map(o => {
+                    if (o._id === selectedOrderId) {
+                        return {
+                            ...res.data.order,
+                            items: o.items,     // Preserve populated items
+                            buyer: o.buyer,     // Preserve populated buyer
+                            sellerId: o.sellerId // Preserve populated seller
+                        };
+                    }
+                    return o;
+                }));
+            }
+
+            toast.success("Order assigned in system!");
+            // fetchOrders(); // Optional, but keeping it as backup sync
+
         } catch (err) {
-            console.error(err);
-            toast.error("Failed to assign order");
+            const errMsg = err.message || err.response?.data?.message || "Sys-Assign Failed";
+
+            if (errMsg !== "Pincode Mismatch Blocked") {
+                if (partnerWindow) partnerWindow.document.body.innerHTML = `<h3>Error</h3><p>${errMsg}</p>`;
+                if (sellerWindow) sellerWindow.document.body.innerHTML = `<h3>Error</h3><p>${errMsg}</p>`;
+            }
+            toast.error(errMsg);
         }
     };
 
     const unassignPartner = async (orderId) => {
-        if (!window.confirm("Are you sure you want to unassign the delivery partner?")) return;
         try {
-            await api.post(`/admin/orders/${orderId}/assign`, { partnerId: null });
-            toast.success("Delivery partner unassigned");
-            fetchOrders();
+            // Optimistic UI Update: assume success and update local state immediately
+            // But better to wait for response to ensure backend sync? User wants explicit change.
+            // Let's call API then update state.
+
+            const res = await api.post(`/admin/orders/${orderId}/assign`, { partnerId: null });
+
+            // Backend returns { message, order }
+            if (res.data.order) {
+                // Update local state but PRESERVE populated fields (items, buyer, sellerId)
+                // because backend returns unpopulated order on unassign.
+                setOrders(prev => prev.map(o => {
+                    if (o._id === orderId) {
+                        return {
+                            ...res.data.order, // New status/etc
+                            items: o.items,    // Keep populated items
+                            buyer: o.buyer,    // Keep populated buyer
+                            sellerId: o.sellerId, // Keep populated seller
+                            deliveryPartner: null // Explicitly null
+                        };
+                    }
+                    return o;
+                }));
+            } else {
+                // Manual fallback
+                setOrders(prev => prev.map(o => o._id === orderId ? { ...o, deliveryPartner: null } : o));
+            }
+
+            toast.success("Delivery Partner Unassigned!");
+            // fetchOrders(); // Optional if we trust the local update, but good for consistency
         } catch (err) {
-            console.error(err);
             toast.error("Failed to unassign partner");
+            fetchOrders(); // Revert on error
         }
     };
 
     const notifySeller = async (order) => {
-        let currentPartners = partners;
-
-        // Fetch partners if not loaded or if we can't find the current one (just to be safe)
-        if (currentPartners.length === 0) {
-            try {
-                const res = await api.get("/admin/delivery-partners");
-                setPartners(res.data);
-                currentPartners = res.data;
-            } catch (err) {
-                console.error("Failed to fetch partners for notification", err);
-            }
+        if (!order.deliveryPartner) {
+            toast.error("No partner assigned yet");
+            return;
         }
 
-        const partner = order.deliveryPartner;
-        let partnerDetails = partner;
-
-        // If it's an ID, look it up
-        if (typeof partner === 'string') {
-            partnerDetails = currentPartners.find(p => (p.userId?._id || p.userId) === partner);
+        let partnerId = order.deliveryPartner;
+        if (typeof partnerId === 'object' && partnerId !== null) {
+            partnerId = partnerId._id || partnerId.userId?._id || partnerId.userId || partnerId;
         }
+
+        // Pre-open windows
+        // const partnerWindow = window.open('', '_blank'); // Notify only Seller
+        const sellerWindow = window.open('', '_blank');
+
+        // if (partnerWindow) partnerWindow.document.write("<h3>Generating WhatsApp Link...</h3><p>Please wait...</p>");
+        if (sellerWindow) sellerWindow.document.write("<h3>Generating WhatsApp Link...</h3><p>Please wait...</p>");
 
         try {
-            const pid = partnerDetails?.userId?._id || partnerDetails?.userId || partnerDetails?._id || partner;
-            await api.post(`/admin/orders/${order._id}/assign`, { partnerId: pid });
-            toast.success("Backend notified");
+            // --- DATA ENRICHMENT ---
+            // 1. Enrich Seller
+            let enrichedOrder = { ...order };
+            const sellerUser = enrichedOrder.sellerId || {};
+            const sellerHasMobile = sellerUser.profile?.businessPhone || sellerUser.profile?.whatsappNumber || sellerUser.mobile || sellerUser.profile?.mobile;
 
-            let sellerMobile = order.sellerId?.mobile;
-
-            if (!sellerMobile && order.sellerId?._id) {
+            if (!sellerHasMobile && sellerUser._id) {
                 try {
-                    const sellerRes = await api.get(`/admin/sellers/${order.sellerId._id}`);
-                    sellerMobile = sellerRes.data.user?.mobile || sellerRes.data.profile?.businessPhone;
-                } catch (e) {
-                    console.error("Failed to fetch seller mobile", e);
+                    const sellerRes = await api.get(`/admin/sellers/${sellerUser._id}`);
+                    const fullSeller = { ...sellerUser, ...sellerRes.data.user, profile: sellerRes.data.profile };
+                    enrichedOrder.sellerId = fullSeller;
+                } catch (e) { }
+            }
+
+            // 2. Enrich Partner (if missing details)
+            // 'order.deliveryPartner' might be just ID in some views
+            let partnerObj = typeof order.deliveryPartner === 'object' ? order.deliveryPartner : { _id: order.deliveryPartner };
+            // If partner object lacks mobile, fetch it? Partner API might not be exposed as single GET easily?
+            // Usually partners are loaded in 'partners' list.
+            const knownPartner = partners.find(p => p._id === partnerId || p.userId?._id === partnerId || p.userId === partnerId);
+            if (knownPartner) {
+                partnerObj = knownPartner;
+            } else if (!partnerObj.mobile) {
+                // If we don't have it in list and order obj is thin, we rely on Backend Assign Response or try to fetch?
+                // 'assign' re-returns data.
+            }
+            // -----------------------
+
+            // Helper Generation
+            const { pickupMsg, sellerMsg, pMobile, sMobile } = getWhatsAppContent(enrichedOrder, partnerObj, true);
+
+            // 1. Trigger Backend Assignment (Re-Notify)
+            // We do this to ensure backend sync, but we use Frontend generated content if valid.
+            const res = await api.post(`/admin/orders/${order._id}/assign`, { partnerId });
+
+            // Backend returns messages too. We can prefer Backend msg if available (to be super safe) OR use our Enriched Frontend msg.
+            // Let's use Frontend enriched msg for consistency with 'assignPartner',
+            // BUT fallback to Backend response if frontend failed to generate good links.
+
+            // let finalPickupMsg = pickupMsg; // Not sending to partner
+            let finalSellerMsg = sellerMsg;
+            // let finalPartnerMobile = pMobile || res.data.partnerMobile;
+            let finalSellerMobile = sMobile || res.data.sellerMobile;
+
+            /* 
+            // Redirect Partner Window - REMOVED for Notify Seller Bell Icon
+            const safePartnerMobile = formatMobile(finalPartnerMobile);
+            if (safePartnerMobile && finalPickupMsg) {
+                const partnerUrl = `https://api.whatsapp.com/send?phone=${safePartnerMobile}&text=${encodeURIComponent(finalPickupMsg)}`;
+                if (partnerWindow) partnerWindow.location.href = partnerUrl;
+            } else {
+                if (partnerWindow) {
+                    partnerWindow.document.body.innerHTML = `
+                        <h3>Could not generate Partner WhatsApp Link</h3>
+                        <p>Missing Mobile.</p>
+                    `;
+                }
+            } 
+            */
+
+            // Redirect Seller Window
+            const safeSellerMobile = formatMobile(finalSellerMobile);
+            if (safeSellerMobile && finalSellerMsg) {
+                const sellerUrl = `https://api.whatsapp.com/send?phone=${safeSellerMobile}&text=${encodeURIComponent(finalSellerMsg)}`;
+                if (sellerWindow) sellerWindow.location.href = sellerUrl;
+            } else {
+                if (sellerWindow) {
+                    sellerWindow.document.body.innerHTML = `
+                        <h3>Could not generate Seller WhatsApp Link</h3>
+                        <p>Missing Mobile.</p>
+                    `;
                 }
             }
 
-            if (sellerMobile && partnerDetails) {
-                const productDetails = order.items?.map(item => `${item.quantity} x ${item.product?.title || "Product"}`).join(", ");
-                const buyerAddress = order.address ? `${order.address.fullAddress || ""}, ${order.address.city || ""}, ${order.address.pincode || ""}` : "Address not provided";
+            toast.success("Notifications resent and WhatsApps opened!");
 
-                const sellerMsg = `Hello seller ${order.sellerId.shopName} delivery partner assigned ${partnerDetails.fullName || "Partner"}, ${partnerDetails.mobile} is reaching you to deliver ${productDetails} to ${order.buyer?.fullName || "Buyer"}, ${buyerAddress}`;
-
-                const sellerUrl = `https://wa.me/${sellerMobile}?text=${encodeURIComponent(sellerMsg)}`;
-                window.open(sellerUrl, '_blank');
-                toast.success("WhatsApp opened");
-            } else {
-                console.log("Missing Info:", { sellerMobile, partnerDetails });
-                toast.error("Missing seller mobile or partner details");
-            }
         } catch (err) {
-            console.error(err);
-            toast.error("Failed to notify backend");
+            const errMsg = err.response?.data?.message || "Failed to notify backend";
+
+            // if (partnerWindow) partnerWindow.document.body.innerHTML = `<h3>Error</h3><p>${errMsg}</p>`;
+            if (sellerWindow) sellerWindow.document.body.innerHTML = `<h3>Error</h3><p>${errMsg}</p>`;
+
+            toast.error(errMsg);
         }
     };
 
@@ -344,7 +495,6 @@ export default function AdminOrders(props) {
             toast.success("Order marked as Delivered");
             fetchOrders();
         } catch (err) {
-            console.error(err);
             try {
                 await api.put(`/admin/orders/${orderId}`, { orderStatus: 'delivered' });
                 toast.success("Order marked as Delivered");
@@ -377,26 +527,28 @@ export default function AdminOrders(props) {
         );
     };
 
-    const filteredOrders = (Array.isArray(orders) ? orders : []).filter(order => {
-        // filter by status based on view
-        const isDelivered = (order.orderStatus || '').toLowerCase() === 'delivered';
+    const filteredOrders = useMemo(() => {
+        return (Array.isArray(orders) ? orders : []).filter(order => {
+            // filter by status based on view
+            const isDelivered = (order.orderStatus || '').toLowerCase() === 'delivered';
 
-        if (props.isCompletedView) {
-            // Completed View: Show ONLY delivered
-            if (!isDelivered) return false;
-        } else {
-            // Main View: Show EVERYTHING ELSE (Active, Pending, etc.) EXCEPT delivered
-            // User said "removed from the list", implies main list shouldn't have them.
-            if (isDelivered) return false;
-        }
+            if (props.isCompletedView) {
+                // Completed View: Show ONLY delivered
+                if (!isDelivered) return false;
+            } else {
+                // Main View: Show EVERYTHING ELSE (Active, Pending, etc.) EXCEPT delivered
+                // User said "removed from the list", implies main list shouldn't have them.
+                if (isDelivered) return false;
+            }
 
-        // Filter logic
-        const matchesSearch = (order?._id?.toString() || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (order?.buyer?.fullName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (order?.sellerId?.shopName || "").toLowerCase().includes(searchTerm.toLowerCase());
+            // Filter logic
+            const matchesSearch = (order?._id?.toString() || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (order?.buyer?.fullName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (order?.sellerId?.shopName || "").toLowerCase().includes(searchTerm.toLowerCase());
 
-        return matchesSearch;
-    });
+            return matchesSearch;
+        });
+    }, [orders, props.isCompletedView, searchTerm]);
 
 
 
@@ -452,26 +604,26 @@ export default function AdminOrders(props) {
                     <table className="w-full text-left">
                         <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
                             <tr>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Products</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Customer</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Seller</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Amount</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Status</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Order Complete</th>
-                                {props.isCompletedView && <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Delivery Partner</th>}
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Date & Time</th>
-                                {!props.isCompletedView && <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right whitespace-nowrap">Actions</th>}
-                                {props.isCompletedView && <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right whitespace-nowrap">Delete</th>}
+                                <th className="px-4 py-3 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Products</th>
+                                <th className="px-4 py-3 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Customer</th>
+                                <th className="px-4 py-3 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Seller</th>
+                                <th className="px-4 py-3 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Amount</th>
+                                <th className="px-4 py-3 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Status</th>
+                                <th className="px-4 py-3 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Order Complete</th>
+                                {props.isCompletedView && <th className="px-4 py-3 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Delivery Partner</th>}
+                                <th className="px-4 py-3 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Date & Time</th>
+                                {!props.isCompletedView && <th className="px-4 py-3 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right whitespace-nowrap">Actions</th>}
+                                {props.isCompletedView && <th className="px-4 py-3 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right whitespace-nowrap">Delete</th>}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={props.isCompletedView ? "7" : "8"} className="text-center py-10 text-gray-500">Loading orders...</td>
+                                    <td colSpan={props.isCompletedView ? "7" : "8"} className="text-center py-8 text-gray-500 text-sm">Loading orders...</td>
                                 </tr>
                             ) : filteredOrders.length === 0 ? (
                                 <tr>
-                                    <td colSpan={props.isCompletedView ? "7" : "8"} className="text-center py-10 text-gray-500">No orders found.</td>
+                                    <td colSpan={props.isCompletedView ? "7" : "8"} className="text-center py-8 text-gray-500 text-sm">No orders found.</td>
                                 </tr>
                             ) : (
                                 filteredOrders.map((order) => (
@@ -481,62 +633,62 @@ export default function AdminOrders(props) {
                                         onClick={() => setViewOrder(order)}
                                     >
                                         <td
-                                            className="px-6 py-4 whitespace-nowrap group"
+                                            className="px-4 py-3 whitespace-nowrap group"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setViewOrder(order);
                                             }}
                                         >
-                                            <div className="flex flex-col gap-1">
+                                            <div className="flex flex-col gap-0.5">
                                                 {order.items?.slice(0, 2).map((item, idx) => (
-                                                    <div key={idx} className={`text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2 group-hover:text-blue-600 transition-colors`}>
-                                                        <Package size={14} className="text-gray-400" />
+                                                    <div key={idx} className={`text-xs font-medium text-gray-900 dark:text-white flex items-center gap-1.5 group-hover:text-blue-600 transition-colors`}>
+                                                        <Package size={12} className="text-gray-400" />
                                                         <span className="truncate max-w-[150px]">{item.product?.title || "Product"}</span>
-                                                        <span className="text-xs text-gray-500">x{item.quantity}</span>
+                                                        <span className="text-[10px] text-gray-500">x{item.quantity}</span>
                                                     </div>
                                                 ))}
                                                 {order.items?.length > 2 && (
-                                                    <div className="text-xs text-blue-600 dark:text-blue-400 font-medium pl-6">
+                                                    <div className="text-[10px] text-blue-600 dark:text-blue-400 font-medium pl-5">
                                                         +{order.items.length - 2} more...
                                                     </div>
                                                 )}
-                                                <div className="text-[10px] text-gray-400 pl-6 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    Click for details
+                                                <div className="text-[10px] text-gray-400 pl-5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    Click details
                                                 </div>
                                             </div>
-                                            <div className="text-xs text-gray-400 mt-1">Ref: {order._id?.slice(-6).toUpperCase()}</div>
+                                            <div className="text-[10px] text-gray-400 mt-1">Ref: {order._id?.slice(-6).toUpperCase()}</div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
+                                        <td className="px-4 py-3 whitespace-nowrap">
                                             <div className="flex items-center gap-2">
-                                                <User size={16} className="text-gray-400" />
+                                                <User size={14} className="text-gray-400" />
                                                 <div>
-                                                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                                    <div className="text-xs font-medium text-gray-900 dark:text-white">
                                                         {order.buyer?.fullName || "Guest Checkin"}
                                                     </div>
-                                                    <div className="text-xs text-gray-500">{order.buyer?.mobile}</div>
+                                                    <div className="text-[10px] text-gray-500">{order.buyer?.mobile}</div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
+                                        <td className="px-4 py-3 whitespace-nowrap">
                                             <div className="flex items-center gap-2">
-                                                <Store size={16} className="text-gray-400" />
-                                                <span className="text-sm text-gray-600 dark:text-gray-300">
+                                                <Store size={14} className="text-gray-400" />
+                                                <span className="text-xs text-gray-600 dark:text-gray-300">
                                                     {order.sellerId?.shopName || "Unknown Shop"}
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center gap-1 font-medium text-gray-900 dark:text-white">
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                            <div className="flex items-center gap-1 font-medium text-gray-900 dark:text-white text-xs">
                                                 ₹{order.totalAmount?.toLocaleString()}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
+                                        <td className="px-4 py-3 whitespace-nowrap">
                                             <StatusBadge order={order} />
                                         </td>
-                                        <td className="px-6 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                        <td className="px-4 py-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                             {(order.orderStatus || '').toLowerCase() === 'delivered' ? (
-                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                                                    <CheckCircle size={14} />
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                                                    <CheckCircle size={12} />
                                                     Done
                                                 </span>
                                             ) : (
@@ -549,18 +701,18 @@ export default function AdminOrders(props) {
                                                         }
                                                         markAsDelivered(order._id);
                                                     }}
-                                                    className={`p-2 rounded-lg transition-colors border ${!order.deliveryPartner
+                                                    className={`p-1.5 rounded-lg transition-colors border ${!order.deliveryPartner
                                                         ? 'text-gray-300 border-gray-100 dark:border-gray-800 cursor-not-allowed opacity-50'
                                                         : 'text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 border-gray-200 dark:border-gray-700'
                                                         }`}
                                                     title={!order.deliveryPartner ? "Assign Partner First" : "Mark as Delivered"}
                                                 >
-                                                    <div className="w-4 h-4 rounded-sm border-2 border-current"></div>
+                                                    <div className="w-3.5 h-3.5 rounded-sm border-2 border-current"></div>
                                                 </button>
                                             )}
                                         </td>
                                         {props.isCompletedView && (
-                                            <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                            <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                 {(() => {
                                                     const partnerData = order.deliveryPartner;
                                                     let displayPartner = null;
@@ -627,9 +779,14 @@ export default function AdminOrders(props) {
                                                     <div className={`flex items-center justify-center p-1.5 rounded-lg border ${order.deliveryPartner ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' : 'bg-gray-50 border-gray-200 dark:bg-gray-800 dark:border-gray-700'}`}>
                                                         {order.deliveryPartner ? (
                                                             <button
-                                                                onClick={(e) => { e.stopPropagation(); unassignPartner(order._id); }}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (window.confirm("Are you sure to reassign the delivery partner?")) {
+                                                                        unassignPartner(order._id);
+                                                                    }
+                                                                }}
                                                                 className="flex items-center gap-2 px-2 hover:bg-green-100 dark:hover:bg-green-900/40 rounded transition-colors group"
-                                                                title="Unassign Delivery Partner"
+                                                                title="Click to Unassign/Reassign"
                                                             >
                                                                 <CheckCircle size={18} className="text-green-600 dark:text-green-400 group-hover:text-red-500 transition-colors" />
                                                                 <span className="text-xs font-medium text-green-700 dark:text-green-300 group-hover:text-red-600 transition-colors">Assigned</span>

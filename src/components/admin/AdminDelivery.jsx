@@ -20,8 +20,7 @@ export default function AdminDelivery() {
             const res = await api.get("/admin/delivery-partners");
             setPartners(res.data);
         } catch (err) {
-            console.error(err);
-            toast.error("Failed to load delivery partners");
+            toast.error("Failed to fetch delivery partners");
         } finally {
             setLoading(false);
         }
@@ -42,8 +41,7 @@ export default function AdminDelivery() {
             closeModal();
             loadPartners();
         } catch (err) {
-            console.error(err);
-            toast.error(err.response?.data?.message || "Failed to save partner");
+            toast.error(err.response?.data?.message || "Operation failed");
         }
     };
 
@@ -70,7 +68,6 @@ export default function AdminDelivery() {
             toast.success("Delivery Partner deleted");
             loadPartners();
         } catch (err) {
-            console.error(err);
             toast.error("Failed to delete partner");
         }
     };

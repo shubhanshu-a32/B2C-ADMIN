@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import api from "../../services/api";
-import { Store, MapPin, Phone, User, ShoppingBag, ArrowLeft, Sun, Moon, Star, Heart, ShoppingCart } from "lucide-react";
+import { Store, MapPin, Phone, User, ShoppingBag, ArrowLeft, Sun, Moon, Star, Heart, ShoppingCart, TrendingUp } from "lucide-react";
 import useThemeStore from "../../store/themeStore";
 import KetalogLogo from "../../assets/logo/Ketalog_Logo.jpeg";
 
@@ -19,16 +19,16 @@ export default function SellerShopView() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const profileRes = await api.get(`/seller/profile/${id}`);
-                // Flatten the response: Merge user and profile data
-                const { user, profile } = profileRes.data;
-                setSeller({ ...user, ...profile });
+                const profileRes = await api.get(`/admin/sellers/${id}`);
+                // Flatten the response: Merge user, profile, AND ORDERS data
+                const { user, profile, orders } = profileRes.data;
+                setSeller({ ...user, ...profile, orders }); // Store orders in seller object for stats
 
                 const productsRes = await api.get(`/products?seller=${id}`);
                 const pData = Array.isArray(productsRes.data) ? productsRes.data : (productsRes.data.data || []);
                 setProducts(pData);
             } catch (err) {
-                console.error("Failed to load shop data", err);
+                // Silent catch
             } finally {
                 setLoading(false);
             }
@@ -93,7 +93,7 @@ export default function SellerShopView() {
                 {/* Shop Banner Card - Integrated User's Hero structure into Dark Theme */}
                 <div className="bg-[#1f2937] rounded-3xl overflow-hidden shadow-2xl border border-gray-800 relative">
                     {/* Gradient Background */}
-                    <div className="h-32 md:h-40 bg-gradient-to-r from-blue-600 to-indigo-600 w-full relative">
+                    <div className="h-24 md:h-32 bg-gradient-to-r from-blue-600 to-indigo-600 w-full relative">
                         <div className="absolute inset-0 bg-black/10"></div>
                         {/* Abstract Circles (User Code) */}
                         <div className="absolute top-0 right-0 p-4 opacity-10">
@@ -103,10 +103,10 @@ export default function SellerShopView() {
                         </div>
                     </div>
 
-                    <div className="px-6 pb-6 md:px-10 md:pb-8 relative">
-                        <div className="flex flex-col md:flex-row items-start gap-6 -mt-12">
+                    <div className="px-4 pb-6 md:px-8 md:pb-6 relative">
+                        <div className="flex flex-col md:flex-row items-start gap-4 -mt-10">
                             {/* Avatar */}
-                            <div className="h-24 w-24 rounded-2xl bg-[#1f2937] p-1 shadow-md border-4 border-[#1f2937] overflow-hidden">
+                            <div className="h-20 w-20 rounded-2xl bg-[#1f2937] p-1 shadow-md border-4 border-[#1f2937] overflow-hidden">
                                 {seller.profilePicture ? (
                                     <img
                                         src={seller.profilePicture}
@@ -121,8 +121,10 @@ export default function SellerShopView() {
                             </div>
 
                             <div className="flex-1 pt-2 md:pt-14">
-                                <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">{seller.shopName}</h1>
-                                <div className="flex flex-wrap gap-2 text-sm text-gray-400">
+                                <h1 className="text-2xl md:text-3xl font-bold text-white mb-3">{seller.shopName}</h1>
+
+                                {/* Info Pills - Row 1 */}
+                                <div className="flex flex-wrap gap-2 text-sm text-gray-400 mb-2">
                                     <div className="flex items-center gap-1.5 bg-[#374151] px-3 py-1 rounded-full">
                                         <User size={14} />
                                         <span>{seller.ownerName || "Unknown Owner"}</span>
@@ -130,25 +132,59 @@ export default function SellerShopView() {
                                     {seller.address && (
                                         <div className="flex items-center gap-1.5 bg-[#374151] px-3 py-1 rounded-full">
                                             <MapPin size={14} />
-                                            <span className="max-w-xs truncate">{seller.address}</span>
+                                            <span className="max-w-xs truncate">{seller.address} - {seller.pincode}</span>
                                         </div>
                                     )}
+                                </div>
+
+                                {/* Info Pills - Row 2 (Extra Data) */}
+                                <div className="flex flex-wrap gap-2 text-sm text-gray-400">
+                                    {seller.email && (
+                                        <div className="flex items-center gap-1.5 bg-[#374151] px-3 py-1 rounded-full border border-gray-700">
+                                            <span className="text-xs text-gray-500">Email:</span>
+                                            <span className="select-all text-gray-300">{seller.email}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex items-center gap-1.5 bg-[#374151] px-3 py-1 rounded-full border border-gray-700">
+                                        <span className="text-xs text-gray-500">Joined:</span>
+                                        <span className="text-gray-300">
+                                            {new Date(seller.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Actions */}
-                            <div className="pt-2 md:pt-14 flex gap-3 w-full md:w-auto mt-4 md:mt-0">
-                                {seller.mobile && (
-                                    <a href={`tel:${seller.mobile}`} className="flex-1 md:flex-none px-4 py-2 border border-gray-600 hover:border-gray-500 rounded-lg text-gray-300 hover:text-white transition flex items-center justify-center gap-2 text-sm font-medium">
-                                        <Phone size={16} />
-                                        Call
-                                    </a>
-                                )}
-                                {mapLink && (
-                                    <a href={mapLink} target="_blank" rel="noreferrer" className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white transition flex items-center justify-center gap-2 text-sm font-medium shadow-lg shadow-blue-500/20">
-                                        <MapPin size={16} />
-                                        Locate Shop
-                                    </a>
+                            <div className="pt-2 md:pt-14 flex flex-col md:items-end gap-4 w-full md:w-auto mt-4 md:mt-0 self-end md:self-auto pb-1">
+
+                                {/* Contact Buttons */}
+                                <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                                    {(seller.businessPhone || seller.mobile) && (
+                                        <a href={`tel:${seller.businessPhone || seller.mobile}`} className="flex-1 w-full md:w-auto justify-center px-6 py-3 border-2 border-green-500 hover:bg-green-500/10 rounded-xl text-green-500 hover:text-green-400 transition flex items-center gap-2 font-bold shadow-sm">
+                                            <Phone size={20} />
+                                            <span>{seller.businessPhone || seller.mobile}</span>
+                                        </a>
+                                    )}
+
+                                    {mapLink && (
+                                        <a href={mapLink} target="_blank" rel="noreferrer" className="flex-1 w-full md:w-auto justify-center px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl text-white transition flex items-center gap-2 font-bold shadow-lg shadow-blue-500/20">
+                                            <MapPin size={20} />
+                                            <span>Locate Shop</span>
+                                        </a>
+                                    )}
+                                </div>
+
+                                {/* Address Box (Explicit Visibility) */}
+                                {(seller.address || seller.pincode) && (
+                                    <div className="bg-gray-800/80 p-3 rounded-xl border border-gray-700 max-w-sm text-center md:text-right backdrop-blur-sm">
+                                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1 flex items-center justify-center md:justify-end gap-1">
+                                            <MapPin size={10} /> Shop Address
+                                        </div>
+                                        <p className="text-gray-200 text-sm leading-snug">
+                                            {seller.address || "No Address Provided"}
+                                            {seller.pincode && <span className="block text-gray-400 text-xs mt-0.5">Pincode: {seller.pincode}</span>}
+                                        </p>
+                                    </div>
                                 )}
                             </div>
                         </div>

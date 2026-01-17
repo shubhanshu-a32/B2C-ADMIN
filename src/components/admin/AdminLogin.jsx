@@ -21,7 +21,7 @@ export default function AdminLogin() {
         try {
             const payload = { email, password };
 
-            console.log("Sending Login Payload:", payload);
+
             const res = await api.post("/admin/login", payload);
             const { accessToken, refreshToken, admin } = res.data;
 
@@ -30,7 +30,6 @@ export default function AdminLogin() {
             toast.success("Welcome back, Admin!");
             navigate("/admin");
         } catch (err) {
-            console.error("Login Error Details:", err.response);
             toast.error(err.response?.data?.message || "Login failed");
         } finally {
             setLoading(false);
